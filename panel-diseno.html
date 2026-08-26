@@ -4,20 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel de Diseño</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Permanent+Marker&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="panel-diseno.css" />
 </head>
 <body>
-  <div class="blob blob--1" aria-hidden="true"></div>
-  <div class="blob blob--2" aria-hidden="true"></div>
-  <div class="blob blob--3" aria-hidden="true"></div>
+  <div class="wall" aria-hidden="true"></div>
+  <div class="spray spray--1" aria-hidden="true"></div>
+  <div class="spray spray--2" aria-hidden="true"></div>
 
   <div class="pd">
-    <a class="pd-back" href="index.html">← Volver al equipo</a>
+    <a class="pd-back" href="index.html">← volver al equipo</a>
 
     <header class="pd-hero">
-      <p class="pd-eyebrow">✨ el rincón del área de diseño gráfico ✨</p>
-      <h1 class="pd-title">Somos el<br /><span class="pd-title__accent">equipo de diseño</span></h1>
-      <p class="pd-tagline">Diseño que conecta información, personas y operación.</p>
+      <span class="pd-stamp">perfil del equipo · gastro bs as</span>
+      <h1 class="pd-title">
+        Somos el<br />
+        <span class="pd-title__tag">equipo de diseño</span>
+      </h1>
+      <p class="pd-tagline"><span class="mark">Diseño que conecta</span> información, personas y operación.</p>
       <p class="pd-intro">
         Le ponemos onda a la información técnica, operativa e institucional de toda la
         compañía y la convertimos en piezas visuales claras, atractivas y fáciles de usar.
@@ -28,21 +34,21 @@
     </header>
 
     <section class="pd-section">
-      <h2 class="pd-section__title">🎯 A qué le metemos ganas</h2>
+      <h2 class="pd-section__title">A qué le metemos ganas</h2>
       <div class="pd-pillars">
-        <article class="pd-pillar pd-pillar--1">
+        <article class="pd-pillar">
           <span class="pd-pillar__num">01</span>
           <span class="pd-pillar__icon">📣</span>
           <h3>Comunicar</h3>
           <p>Piezas claras, coherentes y alineadas con cada objetivo.</p>
         </article>
-        <article class="pd-pillar pd-pillar--2">
+        <article class="pd-pillar">
           <span class="pd-pillar__num">02</span>
           <span class="pd-pillar__icon">🎓</span>
           <h3>Capacitar</h3>
           <p>Recursos didácticos que facilitan la comprensión y la aplicación.</p>
         </article>
-        <article class="pd-pillar pd-pillar--3">
+        <article class="pd-pillar">
           <span class="pd-pillar__num">03</span>
           <span class="pd-pillar__icon">🗂️</span>
           <h3>Sistematizar</h3>
@@ -52,36 +58,38 @@
     </section>
 
     <section class="pd-section">
-      <h2 class="pd-section__title">🚀 Nuestro impacto en números</h2>
+      <h2 class="pd-section__title">Nuestro impacto en números</h2>
       <p class="pd-section__lead">Spoiler: no paramos.</p>
       <div class="pd-stats">
-        <div class="pd-stat pd-stat--purple">
+        <div class="pd-stat">
           <span class="pd-stat__icon">🖼️</span>
           <span class="pd-stat__num">+900</span>
           <span class="pd-stat__label">piezas gráficas realizadas</span>
         </div>
-        <div class="pd-stat pd-stat--orange">
+        <div class="pd-stat">
           <span class="pd-stat__icon">📘</span>
           <span class="pd-stat__num">11</span>
           <span class="pd-stat__label">manuales desarrollados desde cero</span>
         </div>
-        <div class="pd-stat pd-stat--teal">
+        <div class="pd-stat">
           <span class="pd-stat__icon">🌎</span>
           <span class="pd-stat__num">2</span>
           <span class="pd-stat__label">países: Argentina y España</span>
         </div>
-        <div class="pd-stat pd-stat--pink">
+        <div class="pd-stat pd-stat--fill">
           <span class="pd-stat__icon">🏢</span>
           <span class="pd-stat__num">100%</span>
           <span class="pd-stat__label">toda la compañía · alcance transversal</span>
         </div>
       </div>
       <div class="pd-notes">
-        <div class="pd-note pd-note--yellow">
+        <div class="pd-note">
+          <span class="pd-note__tape"></span>
           <strong>Actualización continua</strong>
           <p>Los manuales, presentaciones y materiales evolucionan junto con los procesos, las marcas y las necesidades de la organización.</p>
         </div>
-        <div class="pd-note pd-note--blue">
+        <div class="pd-note">
+          <span class="pd-note__tape"></span>
           <strong>Más que volumen</strong>
           <p>Cada pieza suele ser parte de algo más grande: un manual, una implementación, una capacitación, una campaña interna. Por eso medimos también la coherencia y la facilidad de uso de cada entrega.</p>
         </div>
@@ -89,46 +97,46 @@
     </section>
 
     <section class="pd-section">
-      <h2 class="pd-section__title">🤝 Marcas y áreas que acompañamos</h2>
+      <h2 class="pd-section__title">Marcas y áreas que acompañamos</h2>
       <p class="pd-section__lead">Traducimos las necesidades de cada equipo a un lenguaje visual común, adaptado a cada identidad y contexto.</p>
 
       <h3 class="pd-subtitle">Marcas gastronómicas</h3>
       <div class="pd-chips">
-        <span class="chip chip--1">Sabores Express ARG.</span>
-        <span class="chip chip--2">Sabores Express España</span>
-        <span class="chip chip--3">Hamburguesas Extremas</span>
-        <span class="chip chip--4">Empanadas Manía</span>
-        <span class="chip chip--5">Empanadas Manía Franquicias</span>
-        <span class="chip chip--1">Pizza Free</span>
-        <span class="chip chip--2">Bella Ragazza</span>
-        <span class="chip chip--3">Puerto Milanesa</span>
-        <span class="chip chip--4">Lomitos Jacks</span>
+        <span class="chip">Sabores Express ARG.</span>
+        <span class="chip chip--accent">Sabores Express España</span>
+        <span class="chip">Hamburguesas Extremas</span>
+        <span class="chip chip--accent">Empanadas Manía</span>
+        <span class="chip">Empanadas Manía Franquicias</span>
+        <span class="chip chip--accent">Pizza Free</span>
+        <span class="chip">Bella Ragazza</span>
+        <span class="chip chip--accent">Puerto Milanesa</span>
+        <span class="chip">Lomitos Jacks</span>
       </div>
 
       <div class="pd-callout">
-        <strong>Alcance corporativo 📐</strong> Manual Gastro y Manual de Auditoría, desarrollados y mantenidos por el área.
+        <strong>Alcance corporativo</strong> Manual Gastro y Manual de Auditoría, desarrollados y mantenidos por el área.
       </div>
 
       <h3 class="pd-subtitle">Áreas internas</h3>
       <div class="pd-chips">
-        <span class="chip chip--5">Operaciones</span>
-        <span class="chip chip--1">Recursos Humanos</span>
-        <span class="chip chip--2">Capacitación y Cultura</span>
-        <span class="chip chip--3">Legales</span>
-        <span class="chip chip--4">Auditoría</span>
-        <span class="chip chip--5">Mantenimiento</span>
-        <span class="chip chip--1">Sistemas</span>
-        <span class="chip chip--2">Logística y Distribución</span>
-        <span class="chip chip--3">Fábricas</span>
-        <span class="chip chip--4">Franquicias</span>
-        <span class="chip chip--5">Selección</span>
-        <span class="chip chip--1">Seguridad e Higiene</span>
+        <span class="chip">Operaciones</span>
+        <span class="chip chip--accent">Recursos Humanos</span>
+        <span class="chip">Capacitación y Cultura</span>
+        <span class="chip chip--accent">Legales</span>
+        <span class="chip">Auditoría</span>
+        <span class="chip chip--accent">Mantenimiento</span>
+        <span class="chip">Sistemas</span>
+        <span class="chip chip--accent">Logística y Distribución</span>
+        <span class="chip">Fábricas</span>
+        <span class="chip chip--accent">Franquicias</span>
+        <span class="chip">Selección</span>
+        <span class="chip chip--accent">Seguridad e Higiene</span>
       </div>
-      <p class="pd-mini">Una mirada integral para acompañar a toda la organización 💜</p>
+      <p class="pd-mini">Una mirada integral para acompañar a toda la organización.</p>
     </section>
 
     <section class="pd-section">
-      <h2 class="pd-section__title">🌟 Proyectos que nos enorgullecen</h2>
+      <h2 class="pd-section__title">Proyectos que nos enorgullecen</h2>
       <div class="pd-projects">
         <article class="pd-project">
           <span class="pd-project__badge">01</span>
@@ -180,12 +188,12 @@
         Diseñamos para que la información se vea mejor,<br />
         se entienda mejor y pueda utilizarse mejor.
       </p>
-      <p class="pd-closing__wink">✨ (y para pasarla bien haciéndolo) ✨</p>
+      <p class="pd-closing__wink">(y para pasarla bien haciéndolo)</p>
     </section>
 
     <footer class="pd-footer">
       <p>¿Preferís la versión formal, en PDF, para compartir o imprimir?</p>
-      <a class="pd-pdf-link" href="assetdise/Perfil_Area_Diseno_Grafico.pdf" target="_blank" rel="noopener">
+      <a class="pd-pdf-link" href="assetdise/Perfil_Area_Diseno_Grafico.pdf">
         📄 Descargar el perfil institucional en PDF
       </a>
     </footer>
