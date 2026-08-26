@@ -1,20 +1,20 @@
 :root {
-  --page-bg: #eef1f8;
+  --page-bg: #ffffff;
   --card-bg: #ffffff;
-  --card-border: #e4e0fb;
-  --card-border-strong: #cabdf7;
+  --card-border: #bae6fd;
+  --card-border-strong: #7dd3fc;
   --text-main: #14161f;
   --text-muted: #6b7280;
-  --label-color: #4f46e5;
-  --nickname-color: #7c3aed;
-  --avatar-ring: #e9e5fc;
+  --label-color: #0284c7;
+  --nickname-color: #0ea5e9;
+  --avatar-ring: #e0f2fe;
   --banner-bg-start: #1c2438;
   --banner-bg-end: #0d1220;
   --banner-icon-bg: #262f47;
-  --banner-eyebrow: #a78bfa;
+  --banner-eyebrow: #7dd3fc;
   --banner-subtitle: #a7acc4;
-  --banner-cta-bg: #6d5bf5;
-  --banner-cta-bg-hover: #5a48e0;
+  --banner-cta-bg: #0ea5e9;
+  --banner-cta-bg-hover: #0284c7;
 }
 
 * {
@@ -36,12 +36,14 @@ body {
   max-width: 680px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 24px;
 }
 
 /* ---------- Banner (replicates the "Panel de..." banner format) ---------- */
 
 .banner {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -134,7 +136,9 @@ body {
 /* ---------- Team block (replicates the "Diseño" card format) ---------- */
 
 .team-block {
+  width: 100%;
   max-width: 420px;
+  margin: 0 auto;
   background: var(--card-bg);
   border: 1.5px solid var(--card-border-strong);
   border-radius: 18px;
