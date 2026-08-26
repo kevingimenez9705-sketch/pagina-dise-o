@@ -1,0 +1,164 @@
+:root {
+  --page-bg: #eef1f8;
+  --card-bg: #ffffff;
+  --card-border: #e4e0fb;
+  --card-border-strong: #cabdf7;
+  --text-main: #14161f;
+  --text-muted: #6b7280;
+  --label-color: #4f46e5;
+  --nickname-color: #7c3aed;
+  --avatar-ring: #e9e5fc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 40px 20px;
+  background: var(--page-bg);
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text-main);
+  display: flex;
+  justify-content: center;
+}
+
+.page {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ---------- Team block (replicates the "Diseño" card format) ---------- */
+
+.team-block {
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border-strong);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.team-block__title {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-block__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Lead member card */
+
+.lead-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--avatar-ring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nickname-color);
+  font-weight: 700;
+}
+
+.avatar--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 18px;
+}
+
+.avatar--sm {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+  margin: 0 auto 8px;
+}
+
+.lead-card__info {
+  min-width: 0;
+}
+
+.lead-card__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--label-color);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.lead-card__name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lead-card__name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.lead-card__nickname {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--nickname-color);
+}
+
+.lead-card__role {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Junior members grid */
+
+.member-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.member-card {
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.member-card__name {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.member-card__role {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.member-card__trait {
+  margin: 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--nickname-color);
+}
