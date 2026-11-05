@@ -1,5 +1,6 @@
 /* Mesa de Diseño · Gastro BS AS
-   Datos compartidos en Supabase (tablas mesa_*) con login y tiempo real. */
+   Datos compartidos en Supabase. Ingreso con clave: "Naza" (Diseño) o "Miembro".
+   Todo pasa por funciones de la base (mesa_*) que validan la clave en cada llamada. */
 (() => {
   "use strict";
 
@@ -18,6 +19,12 @@
   const IN_REVIEW = ["En revisión"];
   const UNASSIGNED = "Sin asignar";
   const NONE = "__none";
+
+  const TEAM = {
+    Naza: { name: "Nazareno Devia", cls: "av-n" },
+    Agus: { name: "Agustín Monteverdi", cls: "av-a" },
+    Bauti: { name: "Bautista Valle", cls: "av-b" },
+  };
 
   const BRANDS = [
     "Gastro (corporativo)",
@@ -59,15 +66,15 @@
   };
 
   const PRIORITIES = ["Baja", "Media", "Alta", "Urgente"];
-  const AVATAR_CLASSES = ["av-n", "av-a", "av-b"];
   const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const SESSION_KEY = "mesa-diseno-sesion";
+  const POLL_MS = 30000;
 
   /* ---------- Estado ---------- */
 
   const state = {
     items: [],
-    members: [],
-    me: null, // fila de mesa_miembros del usuario logueado
+    me: null, // { rol: "naza" | "miembro", clave, nombre }
     loaded: false,
     nav: "tablero",
     view: "board",
@@ -77,16 +84,31 @@
     openId: null,
   };
 
-  const isDesigner = () => Boolean(state.me && state.me.es_disenador);
+  const isDesigner = () => Boolean(state.me && state.me.rol === "naza");
+  const myName = () => (isDesigner() ? "Naza" : state.me.nombre);
+  const sameName = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 
   const NAVS = {
     tablero: { title: () => "Tablero de pedidos", sub: () => "Cada pedido, en la etapa en la que está.", view: "board" },
     mio: {
       title: () => (isDesigner() ? "Mi trabajo" : "Mis solicitudes"),
-      sub: () => (isDesigner() ? `Lo que tenés asignado, ${state.me.alias}.` : `Los pedidos que cargaste, ${state.me.alias}.`),
+      sub: () => (isDesigner() ? "Lo que tenés asignado, Naza." : `Los pedidos que cargaste, ${state.me.nombre}.`),
       view: null,
     },
     todas: { title: () => "Todas las solicitudes", sub: () => "Todo lo que estamos creando, en un solo lugar.", view: "list" },
+  };
+
+  // Sesión recordada en este navegador
+  const remembered = {
+    get() {
+      try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
+    },
+    set(v) {
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(v)); } catch { /* sin almacenamiento */ }
+    },
+    clear() {
+      try { localStorage.removeItem(SESSION_KEY); } catch { /* sin almacenamiento */ }
+    },
   };
 
   /* ---------- Utilidades ---------- */
@@ -116,16 +138,11 @@
   const isLate = (it) => it.status !== DONE && it.due && it.due < today();
   const two = (n) => String(n).padStart(2, "0");
 
-  const memberOf = (alias) => state.members.find((m) => m.alias === alias);
-
-  const avatarClass = (alias) => {
-    const designers = state.members.filter((m) => m.es_disenador);
-    const i = designers.findIndex((m) => m.alias === alias);
-    return i >= 0 ? AVATAR_CLASSES[i % AVATAR_CLASSES.length] : "";
+  const avatar = (who) => {
+    if (!who) return `<i class="av" aria-hidden="true">–</i>`;
+    const cls = TEAM[who] ? TEAM[who].cls : "";
+    return `<i class="av ${cls}" aria-hidden="true">${esc(who.trim()[0] || "?").toUpperCase()}</i>`;
   };
-
-  const avatar = (alias) =>
-    alias ? `<i class="av ${avatarClass(alias)}" aria-hidden="true">${esc(alias[0])}</i>` : `<i class="av" aria-hidden="true">–</i>`;
 
   const statusColor = (key) => (STATUSES.find((s) => s.key === key) || STATUSES[0]).color;
 
@@ -134,9 +151,8 @@
 
   const designerOptions = (selected) =>
     `<option value=""${!selected ? " selected" : ""}>${UNASSIGNED}</option>` +
-    state.members
-      .filter((m) => m.es_disenador)
-      .map((m) => `<option value="${esc(m.alias)}"${m.alias === selected ? " selected" : ""}>${esc(m.alias)} · ${esc(m.nombre)}</option>`)
+    Object.entries(TEAM)
+      .map(([k, t]) => `<option value="${k}"${k === selected ? " selected" : ""}>${esc(k)} · ${esc(t.name)}</option>`)
       .join("");
 
   let toastTimer;
@@ -148,17 +164,32 @@
     toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
   };
 
-  const fail = (what, error) => {
-    console.error(what, error);
-    toast(`No se pudo ${what}. Probá de nuevo.`);
-  };
-
   /* ---------- Supabase ---------- */
 
   const cfg = window.MESA_CONFIG;
   const sb = window.supabase && cfg ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey) : null;
   let channel = null;
-  let currentUserId = null;
+  let pollTimer = null;
+
+  class KeyError extends Error {}
+
+  const rpc = async (fn, args) => {
+    const { data, error } = await sb.rpc(fn, { p_clave: state.me.clave, ...args });
+    if (error) {
+      if (error.code === "28000") throw new KeyError(error.message);
+      const e = new Error(error.message);
+      e.code = error.code;
+      throw e;
+    }
+    return data;
+  };
+
+  const handleError = (what, error) => {
+    console.error(what, error);
+    if (error instanceof KeyError) return logout("La clave cambió. Ingresá de nuevo.");
+    if (error && error.code === "42501") return toast("Solo Diseño (Naza) puede hacer ese cambio.");
+    toast(`No se pudo ${what}. Probá de nuevo.`);
+  };
 
   const fromRow = (r) => ({
     id: r.id,
@@ -178,17 +209,22 @@
     comments: [],
   });
 
-  const loadData = async () => {
-    const [p, c] = await Promise.all([
-      sb.from("mesa_pedidos").select("*").order("id"),
-      sb.from("mesa_comentarios").select("*").order("created_at").order("id"),
-    ]);
-    if (p.error || c.error) return fail("cargar los pedidos", p.error || c.error);
-    const byId = new Map(p.data.map((r) => [r.id, fromRow(r)]));
-    c.data.forEach((r) => {
+  const fetchData = async () => {
+    const d = await rpc("mesa_datos");
+    const byId = new Map((d.pedidos || []).map((r) => [r.id, fromRow(r)]));
+    (d.comentarios || []).forEach((r) => {
       byId.get(r.pedido_id)?.comments.push({ who: r.autor, at: r.created_at, text: r.texto, system: r.sistema });
     });
-    state.items = [...byId.values()];
+    const next = [...byId.values()];
+
+    // Aviso de pedidos nuevos cargados por otra persona
+    if (state.loaded) {
+      const known = new Set(state.items.map((i) => i.id));
+      const fresh = next.filter((i) => !known.has(i.id) && !sameName(i.createdBy, myName()));
+      if (fresh.length) toast(`Nuevo pedido de ${fresh[0].createdBy}: ${fresh[0].title}`);
+    }
+
+    state.items = next;
     state.loaded = true;
     render();
     if (state.openId && detailDialog.open) {
@@ -197,10 +233,20 @@
     }
   };
 
-  let reloadTimer;
-  const scheduleReload = () => {
-    clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(loadData, 200);
+  const refresh = async () => {
+    if (!state.me) return;
+    try { await fetchData(); } catch (e) { handleError("actualizar los pedidos", e); }
+  };
+
+  let refreshTimer;
+  const scheduleRefresh = () => {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refresh, 200);
+  };
+
+  // Avisa a las otras pantallas que hubo un cambio (no viajan datos)
+  const notify = () => {
+    if (channel) channel.send({ type: "broadcast", event: "cambio", payload: {} }).catch(() => {});
   };
 
   const setLive = (status) => {
@@ -214,31 +260,31 @@
     const [st, label] = map[status] || ["off", "Conectando…"];
     el.dataset.state = st;
     el.textContent = label;
-    if (status === "SUBSCRIBED" && state.loaded) scheduleReload();
+    if (status === "SUBSCRIBED" && state.loaded) scheduleRefresh();
   };
 
-  const subscribe = () => {
+  const connectLive = () => {
     if (channel) sb.removeChannel(channel);
-    const onChange = (payload) => {
-      if (payload.table === "mesa_pedidos" && payload.eventType === "INSERT" && payload.new.creado_por !== state.me.alias) {
-        toast(`Nuevo pedido de ${payload.new.creado_por || "alguien del equipo"}: ${payload.new.titulo}`);
-      }
-      scheduleReload();
-    };
     channel = sb
-      .channel("mesa-diseno")
-      .on("postgres_changes", { event: "*", schema: "public", table: "mesa_pedidos" }, onChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "mesa_comentarios" }, onChange)
+      .channel("mesa-diseno", { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "cambio" }, scheduleRefresh)
       .subscribe(setLive);
+    clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      if (document.visibilityState === "visible") scheduleRefresh();
+    }, POLL_MS);
+  };
+
+  const disconnectLive = () => {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    if (channel) { sb.removeChannel(channel); channel = null; }
   };
 
   /* ---------- Ingreso ---------- */
 
-  const authEl = {
-    form: $("#loginForm"),
-    error: $("#authError"),
-    denied: $("#authDenied"),
-  };
+  const loginForm = $("#loginForm");
+  const authError = $("#authError");
 
   const lock = () => {
     document.body.classList.add("is-locked");
@@ -248,80 +294,77 @@
 
   const showLogin = (msg) => {
     lock();
-    authEl.denied.hidden = true;
-    authEl.form.hidden = false;
-    authEl.error.hidden = !msg;
-    authEl.error.textContent = msg || "";
+    authError.hidden = !msg;
+    authError.textContent = msg || "";
+    syncNameField();
   };
 
-  const showDenied = (email) => {
-    lock();
-    authEl.form.hidden = true;
-    authEl.denied.hidden = false;
-    $("#deniedEmail").textContent = email;
+  const syncNameField = () => {
+    const miembro = loginForm.elements.rol.value === "miembro";
+    $("#nameField").hidden = !miembro;
   };
 
-  const handleSession = async (session) => {
-    if (!session) {
-      currentUserId = null;
-      state.me = null;
-      state.items = [];
-      state.loaded = false;
-      if (channel) { sb.removeChannel(channel); channel = null; }
-      showLogin();
-      return;
-    }
-    if (session.user.id === currentUserId) return;
-    currentUserId = session.user.id;
-
-    const email = (session.user.email || "").toLowerCase();
-    const { data, error } = await sb.from("mesa_miembros").select("alias, nombre, email, es_disenador").order("alias");
-    if (error) {
-      currentUserId = null;
-      return showLogin("No pudimos verificar tu acceso. Probá de nuevo.");
-    }
-    const me = data.find((m) => m.email === email);
-    if (!me) return showDenied(email);
-
-    state.members = data;
-    state.me = me;
-    fillStaticSelects();
-    document.body.classList.remove("is-locked");
-    render();
-    await loadData();
-    subscribe();
-  };
-
-  authEl.form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = authEl.form.elements;
-    const email = f.email.value.trim();
-    const password = f.password.value;
-    if (!email || !password) return showLogin("Completá tu email y tu contraseña.");
-    const btn = authEl.form.querySelector("button[type=submit]");
-    btn.disabled = true;
-    btn.textContent = "Ingresando…";
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    btn.disabled = false;
-    btn.textContent = "Ingresar";
-    if (error) {
-      const msg = /invalid login/i.test(error.message)
-        ? "Email o contraseña incorrectos."
-        : /not confirmed/i.test(error.message)
-          ? "Tu cuenta todavía no está confirmada."
-          : "No pudimos ingresar. Probá de nuevo.";
-      showLogin(msg);
-    } else {
-      f.password.value = "";
-    }
+  loginForm.addEventListener("change", (e) => {
+    if (e.target.name === "rol") syncNameField();
   });
 
-  $("#logoutBtn").addEventListener("click", () => sb.auth.signOut());
-  $("#deniedLogout").addEventListener("click", () => sb.auth.signOut());
+  const start = async (me) => {
+    state.me = me;
+    state.loaded = false;
+    try {
+      await fetchData();
+    } catch (e) {
+      state.me = null;
+      remembered.clear();
+      showLogin(e instanceof KeyError ? "La clave cambió. Ingresá de nuevo." : "No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+      return false;
+    }
+    remembered.set(me);
+    document.body.classList.remove("is-locked");
+    fillStaticSelects();
+    render();
+    connectLive();
+    return true;
+  };
+
+  const logout = (msg) => {
+    disconnectLive();
+    remembered.clear();
+    state.me = null;
+    state.items = [];
+    state.loaded = false;
+    loginForm.reset();
+    showLogin(msg);
+  };
+
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = loginForm.elements;
+    const rol = f.rol.value;
+    const clave = f.clave.value.trim();
+    const nombre = f.nombre.value.trim().slice(0, 40);
+    if (rol === "miembro" && !nombre) return showLogin("Escribí tu nombre: así firmás tus pedidos y comentarios.");
+    if (!clave) return showLogin("Escribí la clave.");
+
+    const btn = loginForm.querySelector("button[type=submit]");
+    btn.disabled = true;
+    btn.textContent = "Ingresando…";
+    const { data: real, error } = await sb.rpc("mesa_ingresar", { p_clave: clave });
+    let ok = false;
+    if (error) showLogin("No pudimos conectarnos. Revisá tu conexión y probá de nuevo.");
+    else if (!real) showLogin("Clave incorrecta.");
+    else if (real !== rol) showLogin(real === "naza" ? "Esa es la clave de Naza: elegí «Naza»." : "Esa es la clave de Miembro: elegí «Miembro» y escribí tu nombre.");
+    else ok = await start({ rol, clave, nombre: rol === "naza" ? "Naza" : nombre });
+    btn.disabled = false;
+    btn.textContent = "Ingresar";
+    if (ok) f.clave.value = "";
+  });
+
+  $("#logoutBtn").addEventListener("click", () => logout());
 
   /* ---------- Filtros ---------- */
 
-  const mine = (it) => (isDesigner() ? it.designer === state.me.alias : it.createdBy === state.me.alias);
+  const mine = (it) => (isDesigner() ? it.designer === "Naza" : sameName(it.createdBy, state.me.nombre));
 
   const scoped = () => (state.nav === "mio" ? state.items.filter(mine) : state.items);
 
@@ -356,7 +399,6 @@
     $("#viewTitle").textContent = nav.title();
     $("#viewSub").textContent = nav.sub();
     document.title = `${nav.title()} · Mesa de Diseño`;
-
     $('[data-nav="mio"] .nav__label').textContent = isDesigner() ? "Mi trabajo" : "Mis solicitudes";
 
     $$("[data-nav]").forEach((b) => {
@@ -375,20 +417,18 @@
     if (fd.disabled) fd.value = "";
 
     const av = $("#meAvatar");
-    av.textContent = state.me.alias[0];
-    av.className = `av ${avatarClass(state.me.alias)}`;
-    $("#meName").textContent = state.me.nombre.split(" ")[0];
-    $("#meName").title = state.me.nombre;
-    $("#meRole").textContent = isDesigner() ? "Equipo de Diseño" : "Solicitante";
-
-    $("#teamAvatars").innerHTML = state.members.filter((m) => m.es_disenador).map((m) => avatar(m.alias)).join("");
+    av.textContent = myName()[0].toUpperCase();
+    av.className = `av ${isDesigner() ? TEAM.Naza.cls : ""}`;
+    $("#meName").textContent = isDesigner() ? "Naza" : state.me.nombre;
+    $("#meRole").textContent = isDesigner() ? "Diseño" : "Miembro";
+    $("#teamAvatars").innerHTML = Object.keys(TEAM).map(avatar).join("");
   };
 
   const cardHTML = (it) => {
     const late = isLate(it);
     const n = it.comments.filter((c) => !c.system).length;
     return `
-      <article class="card" tabindex="0" draggable="true" data-id="${it.id}" aria-label="${esc(it.code)}: ${esc(it.title)}">
+      <article class="card" tabindex="0" draggable="${isDesigner()}" data-id="${it.id}" aria-label="${esc(it.code)}: ${esc(it.title)}">
         <div class="card-top"><span class="tag ${TYPES[it.type] ?? ""}">${esc(it.type)}</span><span class="id">${esc(it.code)}</span></div>
         <h3>${esc(it.title)}</h3>
         <div class="type">${esc(it.brand)} · ${esc(it.area)}</div>
@@ -457,24 +497,24 @@
 
   const find = (id) => state.items.find((i) => i.id === Number(id));
 
-  const logChange = (pedidoId, texto) => sb.from("mesa_comentarios").insert({ pedido_id: pedidoId, texto, sistema: true });
-
   const moveTo = async (id, status) => {
     const it = find(id);
     if (!it || it.status === status) return;
+    if (!isDesigner()) return toast("Solo Diseño (Naza) puede mover pedidos.");
     const prev = it.status;
     it.status = status; // respuesta inmediata en pantalla
     render();
     if (state.openId === it.id) renderDetail();
-    const { error } = await sb.from("mesa_pedidos").update({ estado: status }).eq("id", it.id);
-    if (error) {
+    try {
+      await rpc("mesa_mover", { p_id: it.id, p_estado: status });
+      notify();
+      toast(`${it.code} → ${status}`);
+      scheduleRefresh();
+    } catch (e) {
       it.status = prev;
       render();
-      return fail("mover el pedido", error);
+      handleError("mover el pedido", e);
     }
-    await logChange(it.id, `Movió el pedido a «${status}».`);
-    toast(`${it.code} → ${status}`);
-    scheduleReload();
   };
 
   /* ---------- Detalle ---------- */
@@ -485,7 +525,7 @@
     const it = find(state.openId);
     if (!it) return;
     const late = isLate(it);
-    const by = memberOf(it.createdBy);
+    const canManage = isDesigner();
     $("#detailBody").innerHTML = `
       <div class="modal-head">
         <div>
@@ -499,13 +539,15 @@
         <span class="pill"><b>Área</b>${esc(it.area)}</span>
         <span class="pill"><b>Prioridad</b>${esc(it.priority)}</span>
         <span class="pill ${late ? "late" : ""}"><b>Entrega</b>${late ? "Vencido · " : ""}${fmtDate(it.due)}</span>
-        ${it.createdBy ? `<span class="pill"><b>Pidió</b>${esc(by ? by.nombre : it.createdBy)}</span>` : ""}
+        <span class="pill"><b>Pidió</b>${esc(it.createdBy)}</span>
         ${it.print ? `<span class="pill">Incluye impresión</span>` : ""}
+        ${canManage ? "" : `<span class="pill"><b>Estado</b>${esc(it.status)}</span><span class="pill"><b>Diseñador</b>${esc(it.designer || UNASSIGNED)}</span>`}
       </div>
+      ${canManage ? `
       <div class="detail-controls">
         <label>Estado<select data-field="status">${options(STATUSES.map((s) => s.key), it.status)}</select></label>
         <label>Diseñador<select data-field="designer">${designerOptions(it.designer)}</select></label>
-      </div>
+      </div>` : `<p class="readonly-note">El estado y el diseñador los maneja Diseño. Podés sumar comentarios abajo.</p>`}
       <section class="detail-section">
         <h4>Descripción</h4>
         <p>${it.description ? esc(it.description) : "Sin descripción."}</p>
@@ -514,15 +556,15 @@
       <section class="detail-section">
         <h4>Comentarios y movimientos</h4>
         ${it.comments.length ? it.comments.map((c) => `
-          <div class="comment${c.system ? " comment--system" : ""}"><small>${avatar(c.who)}${esc(c.who || "Sistema")} · ${fmtStamp(c.at)}</small><span class="comment__text">${esc(c.text)}</span></div>`).join("") : `<p class="type">Todavía no hay comentarios.</p>`}
+          <div class="comment${c.system ? " comment--system" : ""}"><small>${avatar(c.who)}${esc(c.who)} · ${fmtStamp(c.at)}</small><span class="comment__text">${esc(c.text)}</span></div>`).join("") : `<p class="type">Todavía no hay comentarios.</p>`}
         <form class="row" id="commentForm">
           <label class="sr-only" for="commentInput">Nuevo comentario</label>
-          <input id="commentInput" autocomplete="off" placeholder="Escribí un comentario como ${esc(state.me.alias)}…" maxlength="1000" />
+          <input id="commentInput" autocomplete="off" placeholder="Escribí un comentario como ${esc(myName())}…" maxlength="1000" />
           <button class="primary" type="submit">Comentar</button>
         </form>
       </section>
       <div class="actions">
-        <button class="danger" type="button" data-delete>Eliminar solicitud</button>
+        ${canManage ? `<button class="danger" type="button" data-delete>Eliminar solicitud</button>` : ""}
         <button class="secondary" type="button" data-close>Cerrar</button>
       </div>`;
   };
@@ -542,11 +584,14 @@
     if (field === "status") return moveTo(it.id, e.target.value);
     if (field === "designer") {
       const designer = e.target.value || null;
-      const { error } = await sb.from("mesa_pedidos").update({ disenador: designer }).eq("id", it.id);
-      if (error) return fail("asignar el pedido", error);
-      await logChange(it.id, designer ? `Asignó el pedido a ${designer}.` : "Dejó el pedido sin asignar.");
-      toast(designer ? `${it.code} asignado a ${designer}` : `${it.code} sin asignar`);
-      scheduleReload();
+      try {
+        await rpc("mesa_asignar", { p_id: it.id, p_disenador: designer });
+        notify();
+        toast(designer ? `${it.code} asignado a ${designer}` : `${it.code} sin asignar`);
+        scheduleRefresh();
+      } catch (err) {
+        handleError("asignar el pedido", err);
+      }
     }
   });
 
@@ -558,12 +603,15 @@
     const it = find(state.openId);
     if (!text || !it) return;
     input.disabled = true;
-    const { error } = await sb.from("mesa_comentarios").insert({ pedido_id: it.id, texto: text });
-    input.disabled = false;
-    if (error) return fail("guardar el comentario", error);
-    input.value = "";
-    await loadData();
-    $("#commentInput")?.focus();
+    try {
+      await rpc("mesa_comentar", { p_nombre: state.me.nombre, p_id: it.id, p_texto: text });
+      notify();
+      await fetchData();
+      $("#commentInput")?.focus();
+    } catch (err) {
+      input.disabled = false;
+      handleError("guardar el comentario", err);
+    }
   });
 
   detailDialog.addEventListener("click", async (e) => {
@@ -571,11 +619,15 @@
     if (e.target.closest("[data-delete]")) {
       const it = find(state.openId);
       if (!it || !confirm(`¿Eliminar ${it.code} «${it.title}»? Se borra para todo el equipo.`)) return;
-      const { error } = await sb.from("mesa_pedidos").delete().eq("id", it.id);
-      if (error) return fail("eliminar el pedido", error);
-      detailDialog.close();
-      toast(`${it.code} eliminado`);
-      await loadData();
+      try {
+        await rpc("mesa_eliminar", { p_id: it.id });
+        notify();
+        detailDialog.close();
+        toast(`${it.code} eliminado`);
+        await fetchData();
+      } catch (err) {
+        handleError("eliminar el pedido", err);
+      }
     }
   });
 
@@ -593,6 +645,7 @@
       designers: designerOptions(null),
     };
     $$("[data-options]", newForm).forEach((sel) => { sel.innerHTML = sources[sel.dataset.options]; });
+    $("#newDesignerField").hidden = !isDesigner();
   };
 
   const openNew = () => {
@@ -619,27 +672,31 @@
       return;
     }
     const link = f.link.value.trim();
-    const row = {
+    const pedido = {
       titulo: title,
       marca: f.brand.value,
       area: f.area.value,
       tipo: f.type.value,
       prioridad: f.priority.value,
-      disenador: f.designer.value || null,
+      disenador: isDesigner() ? f.designer.value : "",
       entrega: f.due.value,
       impresion: f.print.checked,
-      link: /^https?:\/\//i.test(link) ? link : null,
-      descripcion: f.description.value.trim() || null,
+      link: /^https?:\/\//i.test(link) ? link : "",
+      descripcion: f.description.value.trim(),
     };
     const btn = newForm.querySelector("button[type=submit]");
     btn.disabled = true;
-    const { data, error } = await sb.from("mesa_pedidos").insert(row).select().single();
-    btn.disabled = false;
-    if (error) return fail("crear la solicitud", error);
-    await logChange(data.id, "Creó la solicitud.");
-    newDialog.close();
-    toast(`${code(data.id)} creado en «Nuevas»`);
-    await loadData();
+    try {
+      const id = await rpc("mesa_crear_pedido", { p_nombre: state.me.nombre, p_pedido: pedido });
+      notify();
+      newDialog.close();
+      toast(`${code(id)} creado en «Nuevas»`);
+      await fetchData();
+    } catch (err) {
+      handleError("crear la solicitud", err);
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   newForm.elements.title.addEventListener("input", (e) => e.target.setCustomValidity(""));
@@ -686,11 +743,11 @@
     }
   });
 
-  // Arrastrar y soltar entre columnas
+  // Arrastrar y soltar entre columnas (solo Diseño)
   const board = $("#board");
   board.addEventListener("dragstart", (e) => {
     const card = e.target.closest(".card");
-    if (!card) return;
+    if (!card || !isDesigner()) return;
     e.dataTransfer.setData("text/plain", card.dataset.id);
     e.dataTransfer.effectAllowed = "move";
     card.classList.add("dragging");
@@ -701,14 +758,14 @@
   });
   board.addEventListener("dragover", (e) => {
     const col = e.target.closest(".column");
-    if (!col) return;
+    if (!col || !isDesigner()) return;
     e.preventDefault();
     $$(".column.drop", board).forEach((c) => c !== col && c.classList.remove("drop"));
     col.classList.add("drop");
   });
   board.addEventListener("drop", (e) => {
     const col = e.target.closest(".column");
-    if (!col) return;
+    if (!col || !isDesigner()) return;
     e.preventDefault();
     col.classList.remove("drop");
     moveTo(e.dataTransfer.getData("text/plain"), col.dataset.status);
@@ -716,7 +773,7 @@
 
   // Al volver a la pestaña, se ponen al día los datos
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && state.me) scheduleReload();
+    if (document.visibilityState === "visible" && state.me) scheduleRefresh();
   });
 
   /* ---------- Inicio ---------- */
@@ -725,7 +782,7 @@
     $("#fBrand").innerHTML = `<option value="">Todas las marcas</option>` + options(BRANDS, "");
     $("#fDesigner").innerHTML =
       `<option value="">Todo el equipo</option>` +
-      state.members.filter((m) => m.es_disenador).map((m) => `<option value="${esc(m.alias)}">${esc(m.alias)}</option>`).join("") +
+      Object.keys(TEAM).map((k) => `<option value="${k}">${k}</option>`).join("") +
       `<option value="${NONE}">${UNASSIGNED}</option>`;
   };
 
@@ -734,8 +791,7 @@
     return;
   }
 
-  // INITIAL_SESSION, SIGNED_IN, SIGNED_OUT… (se difiere para no bloquear el cliente de auth)
-  sb.auth.onAuthStateChange((_event, session) => {
-    setTimeout(() => handleSession(session), 0);
-  });
+  const saved = remembered.get();
+  if (saved && saved.clave && (saved.rol === "naza" || saved.rol === "miembro")) start(saved);
+  else showLogin();
 })();

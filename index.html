@@ -137,7 +137,7 @@
         <label>Prioridad
           <select name="priority" data-options="priorities"></select>
         </label>
-        <label>Diseñador
+        <label id="newDesignerField">Diseñador
           <select name="designer" data-options="designers"></select>
         </label>
         <label>Fecha de entrega
@@ -171,21 +171,28 @@
       <svg class="logo auth__logo" aria-hidden="true"><use href="#logo-dg" /></svg>
       <p class="eyebrow">Capacitación + Diseño</p>
       <h1 class="auth__title" id="authTitle">Mesa de diseño</h1>
-      <p class="auth__lead">Cada idea, cambio y entrega, en orden. Ingresá con tu cuenta del equipo.</p>
+      <p class="auth__lead">Cada idea, cambio y entrega, en orden. Elegí cómo ingresás y escribí tu clave.</p>
       <form id="loginForm" class="auth__form" novalidate>
-        <label>Email
-          <input type="email" name="email" autocomplete="email" required placeholder="nombre@empresa.com" />
+        <fieldset class="roles">
+          <legend class="sr-only">¿Cómo ingresás?</legend>
+          <label class="role">
+            <input type="radio" name="rol" value="naza" checked />
+            <span><strong>Naza</strong><small>Diseño · maneja el tablero</small></span>
+          </label>
+          <label class="role">
+            <input type="radio" name="rol" value="miembro" />
+            <span><strong>Miembro</strong><small>Pide y sigue solicitudes</small></span>
+          </label>
+        </fieldset>
+        <label id="nameField" hidden>Tu nombre
+          <input name="nombre" autocomplete="given-name" maxlength="40" placeholder="Así firmás tus pedidos y comentarios" />
         </label>
-        <label>Contraseña
-          <input type="password" name="password" autocomplete="current-password" required />
+        <label>Clave
+          <input type="password" name="clave" autocomplete="current-password" required />
         </label>
         <p class="auth__error" id="authError" role="alert" hidden></p>
         <button class="primary auth__submit" type="submit">Ingresar</button>
       </form>
-      <div class="auth__denied" id="authDenied" hidden>
-        <p>Tu cuenta <strong id="deniedEmail"></strong> no está habilitada para la Mesa de Diseño. Pedile acceso al administrador.</p>
-        <button class="secondary" type="button" id="deniedLogout">Usar otra cuenta</button>
-      </div>
     </div>
   </section>
 

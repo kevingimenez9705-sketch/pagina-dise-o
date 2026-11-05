@@ -1200,11 +1200,72 @@ body.is-locked .main {
   font-size: 14px;
 }
 
-.auth__denied p {
-  margin: 0 0 16px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--vison-soft);
+.roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.role {
+  position: relative;
+  cursor: pointer;
+}
+
+.role input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.role span {
+  display: block;
+  height: 100%;
+  padding: 14px 14px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.role strong {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 112%;
+  font-size: 17px;
+  color: var(--verde);
+}
+
+.role small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.role input:checked + span {
+  border-color: var(--verde);
+  background: var(--verde);
+}
+
+.role input:checked + span strong,
+.role input:checked + span small {
+  color: var(--vison);
+}
+
+.role input:focus-visible + span {
+  outline: 3px solid var(--vison-deep);
+  outline-offset: 2px;
+}
+
+.readonly-note {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
 }
 
 .loading {
