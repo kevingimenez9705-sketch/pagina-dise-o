@@ -260,23 +260,40 @@ svg {
   font-size: 14px;
 }
 
-.profile select {
-  border: 0;
-  padding: 0 18px 0 0;
-  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ddceba' stroke-width='1.5'/%3E%3C/svg%3E") right center no-repeat;
-  color: var(--vison);
-  font-weight: 700;
-  font-size: 15px;
-  appearance: none;
-  cursor: pointer;
+.profile__text {
+  min-width: 0;
+  flex: 1;
 }
 
-.profile select option {
-  color: var(--turquesa);
+.profile__name {
+  display: block;
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(221, 206, 186, 0.3);
+  border-radius: 999px;
+  background: none;
+  color: var(--vison);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.logout:hover {
+  border-color: var(--vison);
 }
 
 .profile small {
   display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   color: var(--on-dark-soft);
 }
@@ -324,6 +341,19 @@ svg {
   height: 7px;
   border-radius: 50%;
   background: #2e6a5a;
+}
+
+.demo[data-state="off"]::before {
+  background: var(--vison-deep);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.demo[data-state="error"]::before {
+  background: var(--alert);
+}
+
+@keyframes pulse {
+  50% { opacity: 0.3; }
 }
 
 .intro {
@@ -1071,6 +1101,116 @@ textarea {
 .row input {
   flex: 1;
   min-width: 0;
+}
+
+/* ---------- Ingreso ---------- */
+
+.auth {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: none;
+  place-items: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+  background: var(--verde);
+}
+
+body.is-locked .auth {
+  display: grid;
+}
+
+body.is-locked .side,
+body.is-locked .main {
+  visibility: hidden;
+}
+
+.auth::before,
+.auth::after {
+  content: "";
+  position: fixed;
+  width: 360px;
+  height: 180px;
+  border: 64px solid var(--turquesa);
+  pointer-events: none;
+}
+
+.auth::before {
+  top: -64px;
+  left: -60px;
+  border-top: 0;
+  border-radius: 0 0 360px 360px;
+}
+
+.auth::after {
+  bottom: -64px;
+  right: -40px;
+  border-bottom: 0;
+  border-radius: 360px 360px 0 0;
+}
+
+.auth__card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 32px 32px;
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.5);
+}
+
+.auth__logo {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 22px;
+  color: var(--verde);
+}
+
+.auth__title {
+  margin: 8px 0 8px;
+}
+
+.auth__lead {
+  margin: 0 0 24px;
+  color: var(--ink-soft);
+}
+
+.auth__form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth__submit {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.auth__submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.auth__error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f5e1d9;
+  color: #8a3a22;
+  font-size: 14px;
+}
+
+.auth__denied p {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--vison-soft);
+}
+
+.loading {
+  padding: 40px 10px;
+  text-align: center;
+  color: var(--ink-faint);
 }
 
 /* ---------- Toast ---------- */

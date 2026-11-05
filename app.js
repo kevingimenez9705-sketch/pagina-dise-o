@@ -1,5 +1,5 @@
 /* Mesa de Diseño · Gastro BS AS
-   Prototipo interactivo: los pedidos se guardan en localStorage. */
+   Datos compartidos en Supabase (tablas mesa_*) con login y tiempo real. */
 (() => {
   "use strict";
 
@@ -16,13 +16,8 @@
   const DONE = "Entregadas";
   const IN_PRODUCTION = ["En progreso", "Con cambios"];
   const IN_REVIEW = ["En revisión"];
-
-  const TEAM = {
-    Naza: { name: "Nazareno Devia", cls: "av-n" },
-    Agus: { name: "Agustín Monteverdi", cls: "av-a" },
-    Bauti: { name: "Bautista Valle", cls: "av-b" },
-  };
   const UNASSIGNED = "Sin asignar";
+  const NONE = "__none";
 
   const BRANDS = [
     "Gastro (corporativo)",
@@ -64,117 +59,35 @@
   };
 
   const PRIORITIES = ["Baja", "Media", "Alta", "Urgente"];
-
-  const NAVS = {
-    tablero: { title: "Tablero de pedidos", sub: () => "Cada pedido, en la etapa en la que está.", view: "board" },
-    mio: { title: "Mi trabajo", sub: (me) => `Lo que tenés asignado, ${me}.`, view: null },
-    todas: { title: "Todas las solicitudes", sub: () => "Todo lo que estamos creando, en un solo lugar.", view: "list" },
-  };
-
+  const AVATAR_CLASSES = ["av-n", "av-a", "av-b"];
   const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-  const KEY = "mesa-diseno-v1";
-  const ME_KEY = "mesa-diseno-me";
-
-  /* ---------- Datos de ejemplo ---------- */
-
-  const seed = () => [
-    {
-      id: "DIS-001", title: "Manual de bienvenida para nuevos ingresos", brand: "Sabores Express ARG.",
-      area: "Recursos Humanos", type: "Manual", priority: "Alta", designer: "Naza", due: "2026-11-06",
-      status: "En progreso", print: true, link: "",
-      description: "Manual para el primer día de los nuevos ingresos: historia de la marca, valores, uniforme, horarios y contactos clave.\nTiene que poder imprimirse en A5.",
-      comments: [
-        { who: "Naza", at: "2026-11-02T10:15", text: "Arranco con la grilla y la portada. Mañana comparto la primera versión." },
-      ],
-    },
-    {
-      id: "DIS-002", title: "Cronograma de capacitaciones · Noviembre", brand: "Empanadas Manía",
-      area: "Capacitación y Cultura", type: "Capacitación", priority: "Media", designer: "Agus", due: "2026-11-09",
-      status: "Nuevas", print: false, link: "",
-      description: "Pieza para pantallas y WhatsApp con el cronograma mensual de capacitaciones por local.",
-      comments: [],
-    },
-    {
-      id: "DIS-003", title: "Flyer de búsqueda: cocineros y cajeros", brand: "Hamburguesas Extremas",
-      area: "Selección", type: "Pieza gráfica", priority: "Urgente", designer: "Bauti", due: "2026-11-07",
-      status: "En revisión", print: false, link: "",
-      description: "Flyer para redes y portales de empleo. Incluir QR al formulario de postulación.",
-      comments: [
-        { who: "Bauti", at: "2026-11-04T17:40", text: "Subí dos versiones para que el equipo de Selección elija." },
-      ],
-    },
-    {
-      id: "DIS-004", title: "Presentación de resultados Q3", brand: "Gastro (corporativo)",
-      area: "Operaciones", type: "Presentación", priority: "Media", designer: "Naza", due: "2026-11-12",
-      status: "Con cambios", print: false, link: "",
-      description: "Plantilla y armado de la presentación trimestral para la reunión de gerentes.",
-      comments: [
-        { who: "Agus", at: "2026-11-03T12:00", text: "Operaciones pidió sumar un gráfico por marca en la slide 6." },
-      ],
-    },
-    {
-      id: "DIS-005", title: "Señalética de seguridad para cocina", brand: "Pizza Free",
-      area: "Seguridad e Higiene", type: "Señalética", priority: "Alta", designer: "Agus", due: "2026-11-14",
-      status: "En progreso", print: true, link: "",
-      description: "Set de carteles: lavado de manos, uso de EPP, matafuegos y salidas de emergencia.",
-      comments: [],
-    },
-    {
-      id: "DIS-006", title: "Organigrama actualizado de Logística", brand: "Gastro (corporativo)",
-      area: "Logística y Distribución", type: "Organigrama", priority: "Baja", designer: UNASSIGNED, due: "2026-11-20",
-      status: "Nuevas", print: false, link: "",
-      description: "Actualizar el organigrama con los nuevos puestos del centro de distribución.",
-      comments: [],
-    },
-    {
-      id: "DIS-007", title: "Logo para el programa «Líderes en cocina»", brand: "Gastro (corporativo)",
-      area: "Capacitación y Cultura", type: "Logo / identidad", priority: "Media", designer: "Bauti", due: "2026-11-10",
-      status: "Aprobadas", print: false, link: "",
-      description: "Identificador para el programa interno de formación de jefes de cocina.",
-      comments: [
-        { who: "Bauti", at: "2026-11-04T09:30", text: "Aprobado por Capacitación. Preparo las versiones finales." },
-      ],
-    },
-    {
-      id: "DIS-008", title: "Actualización del Manual de Auditoría v3", brand: "Gastro (corporativo)",
-      area: "Auditoría", type: "Manual", priority: "Alta", designer: "Naza", due: "2026-11-03",
-      status: "Entregadas", print: true, link: "",
-      description: "Nueva versión con los checklists revisados y la sección de no conformidades.",
-      comments: [],
-    },
-  ];
 
   /* ---------- Estado ---------- */
 
-  const storage = {
-    get(key) {
-      try { return localStorage.getItem(key); } catch { return null; }
-    },
-    set(key, value) {
-      try { localStorage.setItem(key, value); } catch { /* sin almacenamiento: sigue en memoria */ }
-    },
-  };
-
-  const load = () => {
-    try {
-      const data = JSON.parse(storage.get(KEY));
-      if (Array.isArray(data)) return data;
-    } catch { /* datos corruptos: vuelve al ejemplo */ }
-    return seed();
-  };
-
   const state = {
-    items: load(),
+    items: [],
+    members: [],
+    me: null, // fila de mesa_miembros del usuario logueado
+    loaded: false,
     nav: "tablero",
     view: "board",
     q: "",
     brand: "",
     designer: "",
-    me: TEAM[storage.get(ME_KEY)] ? storage.get(ME_KEY) : "Agus",
     openId: null,
   };
 
-  const save = () => storage.set(KEY, JSON.stringify(state.items));
+  const isDesigner = () => Boolean(state.me && state.me.es_disenador);
+
+  const NAVS = {
+    tablero: { title: () => "Tablero de pedidos", sub: () => "Cada pedido, en la etapa en la que está.", view: "board" },
+    mio: {
+      title: () => (isDesigner() ? "Mi trabajo" : "Mis solicitudes"),
+      sub: () => (isDesigner() ? `Lo que tenés asignado, ${state.me.alias}.` : `Los pedidos que cargaste, ${state.me.alias}.`),
+      view: null,
+    },
+    todas: { title: () => "Todas las solicitudes", sub: () => "Todo lo que estamos creando, en un solo lugar.", view: "list" },
+  };
 
   /* ---------- Utilidades ---------- */
 
@@ -185,7 +98,6 @@
     String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const pad = (n) => String(n).padStart(2, "0");
-
   const isoDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const today = () => isoDay(new Date());
 
@@ -195,22 +107,25 @@
     return `${d} ${MONTHS[m - 1]}`;
   };
 
-  const fmtStamp = (iso) => {
-    const [day, time = ""] = iso.split("T");
-    return `${fmtDate(day)} · ${time.slice(0, 5)}`;
+  const fmtStamp = (ts) => {
+    const d = new Date(ts);
+    return `${d.getDate()} ${MONTHS[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
-  const now = () => {
-    const d = new Date();
-    return `${isoDay(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
+  const code = (id) => `DIS-${String(id).padStart(3, "0")}`;
   const isLate = (it) => it.status !== DONE && it.due && it.due < today();
+  const two = (n) => String(n).padStart(2, "0");
 
-  const avatar = (who) => {
-    const t = TEAM[who];
-    return t ? `<i class="av ${t.cls}" aria-hidden="true">${who[0]}</i>` : `<i class="av" aria-hidden="true">–</i>`;
+  const memberOf = (alias) => state.members.find((m) => m.alias === alias);
+
+  const avatarClass = (alias) => {
+    const designers = state.members.filter((m) => m.es_disenador);
+    const i = designers.findIndex((m) => m.alias === alias);
+    return i >= 0 ? AVATAR_CLASSES[i % AVATAR_CLASSES.length] : "";
   };
+
+  const avatar = (alias) =>
+    alias ? `<i class="av ${avatarClass(alias)}" aria-hidden="true">${esc(alias[0])}</i>` : `<i class="av" aria-hidden="true">–</i>`;
 
   const statusColor = (key) => (STATUSES.find((s) => s.key === key) || STATUSES[0]).color;
 
@@ -218,15 +133,11 @@
     list.map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(v)}</option>`).join("");
 
   const designerOptions = (selected) =>
-    `<option value="${UNASSIGNED}"${selected === UNASSIGNED ? " selected" : ""}>${UNASSIGNED}</option>` +
-    Object.entries(TEAM)
-      .map(([k, t]) => `<option value="${k}"${k === selected ? " selected" : ""}>${esc(k)} · ${esc(t.name)}</option>`)
+    `<option value=""${!selected ? " selected" : ""}>${UNASSIGNED}</option>` +
+    state.members
+      .filter((m) => m.es_disenador)
+      .map((m) => `<option value="${esc(m.alias)}"${m.alias === selected ? " selected" : ""}>${esc(m.alias)} · ${esc(m.nombre)}</option>`)
       .join("");
-
-  const nextId = () => {
-    const max = state.items.reduce((m, it) => Math.max(m, parseInt(String(it.id).split("-")[1], 10) || 0), 0);
-    return `DIS-${String(max + 1).padStart(3, "0")}`;
-  };
 
   let toastTimer;
   const toast = (msg) => {
@@ -234,26 +145,202 @@
     el.textContent = msg;
     el.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
   };
+
+  const fail = (what, error) => {
+    console.error(what, error);
+    toast(`No se pudo ${what}. Probá de nuevo.`);
+  };
+
+  /* ---------- Supabase ---------- */
+
+  const cfg = window.MESA_CONFIG;
+  const sb = window.supabase && cfg ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey) : null;
+  let channel = null;
+  let currentUserId = null;
+
+  const fromRow = (r) => ({
+    id: r.id,
+    code: code(r.id),
+    title: r.titulo,
+    brand: r.marca,
+    area: r.area,
+    type: r.tipo,
+    priority: r.prioridad,
+    designer: r.disenador,
+    due: r.entrega,
+    status: r.estado,
+    print: r.impresion,
+    link: r.link,
+    description: r.descripcion,
+    createdBy: r.creado_por,
+    comments: [],
+  });
+
+  const loadData = async () => {
+    const [p, c] = await Promise.all([
+      sb.from("mesa_pedidos").select("*").order("id"),
+      sb.from("mesa_comentarios").select("*").order("created_at").order("id"),
+    ]);
+    if (p.error || c.error) return fail("cargar los pedidos", p.error || c.error);
+    const byId = new Map(p.data.map((r) => [r.id, fromRow(r)]));
+    c.data.forEach((r) => {
+      byId.get(r.pedido_id)?.comments.push({ who: r.autor, at: r.created_at, text: r.texto, system: r.sistema });
+    });
+    state.items = [...byId.values()];
+    state.loaded = true;
+    render();
+    if (state.openId && detailDialog.open) {
+      if (find(state.openId)) renderDetail();
+      else detailDialog.close();
+    }
+  };
+
+  let reloadTimer;
+  const scheduleReload = () => {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(loadData, 200);
+  };
+
+  const setLive = (status) => {
+    const el = $("#liveBadge");
+    const map = {
+      SUBSCRIBED: ["on", "En vivo"],
+      CHANNEL_ERROR: ["error", "Sin conexión en vivo"],
+      TIMED_OUT: ["error", "Sin conexión en vivo"],
+      CLOSED: ["off", "Desconectado"],
+    };
+    const [st, label] = map[status] || ["off", "Conectando…"];
+    el.dataset.state = st;
+    el.textContent = label;
+    if (status === "SUBSCRIBED" && state.loaded) scheduleReload();
+  };
+
+  const subscribe = () => {
+    if (channel) sb.removeChannel(channel);
+    const onChange = (payload) => {
+      if (payload.table === "mesa_pedidos" && payload.eventType === "INSERT" && payload.new.creado_por !== state.me.alias) {
+        toast(`Nuevo pedido de ${payload.new.creado_por || "alguien del equipo"}: ${payload.new.titulo}`);
+      }
+      scheduleReload();
+    };
+    channel = sb
+      .channel("mesa-diseno")
+      .on("postgres_changes", { event: "*", schema: "public", table: "mesa_pedidos" }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "mesa_comentarios" }, onChange)
+      .subscribe(setLive);
+  };
+
+  /* ---------- Ingreso ---------- */
+
+  const authEl = {
+    form: $("#loginForm"),
+    error: $("#authError"),
+    denied: $("#authDenied"),
+  };
+
+  const lock = () => {
+    document.body.classList.add("is-locked");
+    if (detailDialog.open) detailDialog.close();
+    if (newDialog.open) newDialog.close();
+  };
+
+  const showLogin = (msg) => {
+    lock();
+    authEl.denied.hidden = true;
+    authEl.form.hidden = false;
+    authEl.error.hidden = !msg;
+    authEl.error.textContent = msg || "";
+  };
+
+  const showDenied = (email) => {
+    lock();
+    authEl.form.hidden = true;
+    authEl.denied.hidden = false;
+    $("#deniedEmail").textContent = email;
+  };
+
+  const handleSession = async (session) => {
+    if (!session) {
+      currentUserId = null;
+      state.me = null;
+      state.items = [];
+      state.loaded = false;
+      if (channel) { sb.removeChannel(channel); channel = null; }
+      showLogin();
+      return;
+    }
+    if (session.user.id === currentUserId) return;
+    currentUserId = session.user.id;
+
+    const email = (session.user.email || "").toLowerCase();
+    const { data, error } = await sb.from("mesa_miembros").select("alias, nombre, email, es_disenador").order("alias");
+    if (error) {
+      currentUserId = null;
+      return showLogin("No pudimos verificar tu acceso. Probá de nuevo.");
+    }
+    const me = data.find((m) => m.email === email);
+    if (!me) return showDenied(email);
+
+    state.members = data;
+    state.me = me;
+    fillStaticSelects();
+    document.body.classList.remove("is-locked");
+    render();
+    await loadData();
+    subscribe();
+  };
+
+  authEl.form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = authEl.form.elements;
+    const email = f.email.value.trim();
+    const password = f.password.value;
+    if (!email || !password) return showLogin("Completá tu email y tu contraseña.");
+    const btn = authEl.form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    btn.textContent = "Ingresando…";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    btn.disabled = false;
+    btn.textContent = "Ingresar";
+    if (error) {
+      const msg = /invalid login/i.test(error.message)
+        ? "Email o contraseña incorrectos."
+        : /not confirmed/i.test(error.message)
+          ? "Tu cuenta todavía no está confirmada."
+          : "No pudimos ingresar. Probá de nuevo.";
+      showLogin(msg);
+    } else {
+      f.password.value = "";
+    }
+  });
+
+  $("#logoutBtn").addEventListener("click", () => sb.auth.signOut());
+  $("#deniedLogout").addEventListener("click", () => sb.auth.signOut());
 
   /* ---------- Filtros ---------- */
 
-  const scoped = () => (state.nav === "mio" ? state.items.filter((it) => it.designer === state.me) : state.items);
+  const mine = (it) => (isDesigner() ? it.designer === state.me.alias : it.createdBy === state.me.alias);
+
+  const scoped = () => (state.nav === "mio" ? state.items.filter(mine) : state.items);
 
   const filtered = () => {
     const q = state.q.trim().toLowerCase();
     return scoped().filter((it) => {
       if (state.brand && it.brand !== state.brand) return false;
-      if (state.nav !== "mio" && state.designer && it.designer !== state.designer) return false;
+      if (state.nav !== "mio" && state.designer) {
+        if (state.designer === NONE ? it.designer : it.designer !== state.designer) return false;
+      }
       if (!q) return true;
-      return [it.id, it.title, it.brand, it.area, it.type, it.designer, it.status].join(" ").toLowerCase().includes(q);
+      return [it.code, it.title, it.brand, it.area, it.type, it.designer, it.status, it.createdBy]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
     });
   };
 
   /* ---------- Render ---------- */
-
-  const two = (n) => String(n).padStart(2, "0");
 
   const renderStats = () => {
     const items = scoped();
@@ -261,14 +348,16 @@
     $("#stProd").textContent = two(items.filter((i) => IN_PRODUCTION.includes(i.status)).length);
     $("#stReview").textContent = two(items.filter((i) => IN_REVIEW.includes(i.status)).length);
     $("#stDone").textContent = two(items.filter((i) => i.status === DONE).length);
-    $("#myCount").textContent = state.items.filter((i) => i.designer === state.me && i.status !== DONE).length;
+    $("#myCount").textContent = state.items.filter((i) => mine(i) && i.status !== DONE).length;
   };
 
   const renderChrome = () => {
     const nav = NAVS[state.nav];
-    $("#viewTitle").textContent = nav.title;
-    $("#viewSub").textContent = nav.sub(state.me);
-    document.title = `${nav.title} · Mesa de Diseño`;
+    $("#viewTitle").textContent = nav.title();
+    $("#viewSub").textContent = nav.sub();
+    document.title = `${nav.title()} · Mesa de Diseño`;
+
+    $('[data-nav="mio"] .nav__label').textContent = isDesigner() ? "Mi trabajo" : "Mis solicitudes";
 
     $$("[data-nav]").forEach((b) => {
       const on = b.dataset.nav === state.nav;
@@ -285,23 +374,27 @@
     fd.disabled = state.nav === "mio";
     if (fd.disabled) fd.value = "";
 
-    const t = TEAM[state.me];
     const av = $("#meAvatar");
-    av.textContent = state.me[0];
-    av.className = `av ${t.cls}`;
+    av.textContent = state.me.alias[0];
+    av.className = `av ${avatarClass(state.me.alias)}`;
+    $("#meName").textContent = state.me.nombre.split(" ")[0];
+    $("#meName").title = state.me.nombre;
+    $("#meRole").textContent = isDesigner() ? "Equipo de Diseño" : "Solicitante";
+
+    $("#teamAvatars").innerHTML = state.members.filter((m) => m.es_disenador).map((m) => avatar(m.alias)).join("");
   };
 
   const cardHTML = (it) => {
     const late = isLate(it);
     const n = it.comments.filter((c) => !c.system).length;
     return `
-      <article class="card" tabindex="0" draggable="true" data-id="${esc(it.id)}" aria-label="${esc(it.id)}: ${esc(it.title)}">
-        <div class="card-top"><span class="tag ${TYPES[it.type] ?? ""}">${esc(it.type)}</span><span class="id">${esc(it.id)}</span></div>
+      <article class="card" tabindex="0" draggable="true" data-id="${it.id}" aria-label="${esc(it.code)}: ${esc(it.title)}">
+        <div class="card-top"><span class="tag ${TYPES[it.type] ?? ""}">${esc(it.type)}</span><span class="id">${esc(it.code)}</span></div>
         <h3>${esc(it.title)}</h3>
         <div class="type">${esc(it.brand)} · ${esc(it.area)}</div>
         <span class="priority ${esc(it.priority)}">Prioridad ${esc(it.priority.toLowerCase())}</span>
         <div class="card-bottom">
-          <span class="who">${avatar(it.designer)}${esc(it.designer)}</span>
+          <span class="who">${avatar(it.designer)}${esc(it.designer || UNASSIGNED)}</span>
           <span class="meta-right">
             ${n ? `<span class="comments-count" title="${n} comentario${n > 1 ? "s" : ""}"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>${n}</span>` : ""}
             <span class="${late ? "late" : ""}" title="Entrega">${late ? "Vencido · " : ""}${fmtDate(it.due)}</span>
@@ -311,9 +404,13 @@
   };
 
   const renderBoard = () => {
+    if (!state.loaded) {
+      $("#board").innerHTML = `<div class="loading">Cargando pedidos…</div>`;
+      return;
+    }
     const items = filtered();
     $("#board").innerHTML = STATUSES.map((s) => {
-      const col = items.filter((i) => i.status === s.key).sort((a, b) => (a.due || "").localeCompare(b.due || ""));
+      const col = items.filter((i) => i.status === s.key).sort((a, b) => (a.due || "9").localeCompare(b.due || "9"));
       return `
         <section class="column" data-status="${esc(s.key)}" aria-label="${esc(s.key)}">
           <div class="column-head"><span class="dot" style="--color:${s.color}"></span>${esc(s.key)}<span class="count">${col.length}</span></div>
@@ -323,9 +420,13 @@
   };
 
   const renderList = () => {
-    const items = filtered().sort((a, b) => (a.due || "").localeCompare(b.due || ""));
+    if (!state.loaded) {
+      $("#list").innerHTML = `<div class="loading">Cargando pedidos…</div>`;
+      return;
+    }
+    const items = filtered().sort((a, b) => (a.due || "9").localeCompare(b.due || "9"));
     if (!items.length) {
-      $("#list").innerHTML = `<div class="empty">No hay pedidos con estos filtros.</div>`;
+      $("#list").innerHTML = `<div class="empty">${state.items.length ? "No hay pedidos con estos filtros." : "Todavía no hay pedidos. Creá el primero con «Nueva solicitud»."}</div>`;
       return;
     }
     $("#list").innerHTML = `
@@ -333,11 +434,11 @@
         <thead><tr><th scope="col">Pedido</th><th scope="col">Marca</th><th scope="col">Estado</th><th scope="col">Diseñador</th><th scope="col">Entrega</th></tr></thead>
         <tbody>
           ${items.map((it) => `
-            <tr tabindex="0" data-id="${esc(it.id)}">
-              <td><span class="id">${esc(it.id)}</span><span class="td-title">${esc(it.title)}</span></td>
+            <tr tabindex="0" data-id="${it.id}">
+              <td><span class="id">${esc(it.code)}</span><span class="td-title">${esc(it.title)}</span></td>
               <td>${esc(it.brand)}</td>
               <td><span class="status"><span class="dot" style="--color:${statusColor(it.status)}"></span>${esc(it.status)}</span></td>
-              <td><span class="who">${avatar(it.designer)}${esc(it.designer)}</span></td>
+              <td><span class="who">${avatar(it.designer)}${esc(it.designer || UNASSIGNED)}</span></td>
               <td class="${isLate(it) ? "late" : ""}">${fmtDate(it.due)}</td>
             </tr>`).join("")}
         </tbody>
@@ -345,6 +446,7 @@
   };
 
   const render = () => {
+    if (!state.me) return;
     renderChrome();
     renderStats();
     if (state.view === "board") renderBoard();
@@ -353,19 +455,26 @@
 
   /* ---------- Acciones ---------- */
 
-  const find = (id) => state.items.find((i) => i.id === id);
+  const find = (id) => state.items.find((i) => i.id === Number(id));
 
-  const logChange = (it, text) => it.comments.push({ who: state.me, at: now(), text, system: true });
+  const logChange = (pedidoId, texto) => sb.from("mesa_comentarios").insert({ pedido_id: pedidoId, texto, sistema: true });
 
-  const moveTo = (id, status) => {
+  const moveTo = async (id, status) => {
     const it = find(id);
     if (!it || it.status === status) return;
-    it.status = status;
-    logChange(it, `Movió el pedido a «${status}».`);
-    save();
+    const prev = it.status;
+    it.status = status; // respuesta inmediata en pantalla
     render();
-    if (state.openId === id) renderDetail();
-    toast(`${it.id} → ${status}`);
+    if (state.openId === it.id) renderDetail();
+    const { error } = await sb.from("mesa_pedidos").update({ estado: status }).eq("id", it.id);
+    if (error) {
+      it.status = prev;
+      render();
+      return fail("mover el pedido", error);
+    }
+    await logChange(it.id, `Movió el pedido a «${status}».`);
+    toast(`${it.code} → ${status}`);
+    scheduleReload();
   };
 
   /* ---------- Detalle ---------- */
@@ -376,10 +485,11 @@
     const it = find(state.openId);
     if (!it) return;
     const late = isLate(it);
+    const by = memberOf(it.createdBy);
     $("#detailBody").innerHTML = `
       <div class="modal-head">
         <div>
-          <p class="eyebrow">${esc(it.id)} · ${esc(it.type)}</p>
+          <p class="eyebrow">${esc(it.code)} · ${esc(it.type)}</p>
           <h2 id="detailTitle">${esc(it.title)}</h2>
         </div>
         <button class="close" type="button" data-close aria-label="Cerrar"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
@@ -389,6 +499,7 @@
         <span class="pill"><b>Área</b>${esc(it.area)}</span>
         <span class="pill"><b>Prioridad</b>${esc(it.priority)}</span>
         <span class="pill ${late ? "late" : ""}"><b>Entrega</b>${late ? "Vencido · " : ""}${fmtDate(it.due)}</span>
+        ${it.createdBy ? `<span class="pill"><b>Pidió</b>${esc(by ? by.nombre : it.createdBy)}</span>` : ""}
         ${it.print ? `<span class="pill">Incluye impresión</span>` : ""}
       </div>
       <div class="detail-controls">
@@ -403,10 +514,10 @@
       <section class="detail-section">
         <h4>Comentarios y movimientos</h4>
         ${it.comments.length ? it.comments.map((c) => `
-          <div class="comment${c.system ? " comment--system" : ""}"><small>${avatar(c.who)}${esc(c.who)} · ${fmtStamp(c.at)}</small><span class="comment__text">${esc(c.text)}</span></div>`).join("") : `<p class="type">Todavía no hay comentarios.</p>`}
+          <div class="comment${c.system ? " comment--system" : ""}"><small>${avatar(c.who)}${esc(c.who || "Sistema")} · ${fmtStamp(c.at)}</small><span class="comment__text">${esc(c.text)}</span></div>`).join("") : `<p class="type">Todavía no hay comentarios.</p>`}
         <form class="row" id="commentForm">
           <label class="sr-only" for="commentInput">Nuevo comentario</label>
-          <input id="commentInput" autocomplete="off" placeholder="Escribí un comentario como ${esc(state.me)}…" maxlength="500" />
+          <input id="commentInput" autocomplete="off" placeholder="Escribí un comentario como ${esc(state.me.alias)}…" maxlength="1000" />
           <button class="primary" type="submit">Comentar</button>
         </form>
       </section>
@@ -417,53 +528,54 @@
   };
 
   const openDetail = (id) => {
-    state.openId = id;
+    state.openId = Number(id);
     renderDetail();
     if (!detailDialog.open) detailDialog.showModal();
   };
 
   detailDialog.addEventListener("close", () => { state.openId = null; });
 
-  detailDialog.addEventListener("change", (e) => {
+  detailDialog.addEventListener("change", async (e) => {
     const field = e.target.dataset.field;
     const it = find(state.openId);
     if (!field || !it) return;
     if (field === "status") return moveTo(it.id, e.target.value);
     if (field === "designer") {
-      it.designer = e.target.value;
-      logChange(it, it.designer === UNASSIGNED ? "Dejó el pedido sin asignar." : `Asignó el pedido a ${it.designer}.`);
-      save();
-      render();
-      renderDetail();
-      toast(`${it.id} asignado a ${it.designer}`);
+      const designer = e.target.value || null;
+      const { error } = await sb.from("mesa_pedidos").update({ disenador: designer }).eq("id", it.id);
+      if (error) return fail("asignar el pedido", error);
+      await logChange(it.id, designer ? `Asignó el pedido a ${designer}.` : "Dejó el pedido sin asignar.");
+      toast(designer ? `${it.code} asignado a ${designer}` : `${it.code} sin asignar`);
+      scheduleReload();
     }
   });
 
-  detailDialog.addEventListener("submit", (e) => {
+  detailDialog.addEventListener("submit", async (e) => {
     if (e.target.id !== "commentForm") return;
     e.preventDefault();
     const input = $("#commentInput");
     const text = input.value.trim();
     const it = find(state.openId);
     if (!text || !it) return;
-    it.comments.push({ who: state.me, at: now(), text });
-    save();
-    render();
-    renderDetail();
-    $("#commentInput").focus();
+    input.disabled = true;
+    const { error } = await sb.from("mesa_comentarios").insert({ pedido_id: it.id, texto: text });
+    input.disabled = false;
+    if (error) return fail("guardar el comentario", error);
+    input.value = "";
+    await loadData();
+    $("#commentInput")?.focus();
   });
 
-  detailDialog.addEventListener("click", (e) => {
+  detailDialog.addEventListener("click", async (e) => {
     if (e.target === detailDialog || e.target.closest("[data-close]")) return detailDialog.close();
     if (e.target.closest("[data-delete]")) {
       const it = find(state.openId);
-      if (it && confirm(`¿Eliminar ${it.id} «${it.title}»?`)) {
-        state.items = state.items.filter((i) => i !== it);
-        save();
-        detailDialog.close();
-        render();
-        toast(`${it.id} eliminado`);
-      }
+      if (!it || !confirm(`¿Eliminar ${it.code} «${it.title}»? Se borra para todo el equipo.`)) return;
+      const { error } = await sb.from("mesa_pedidos").delete().eq("id", it.id);
+      if (error) return fail("eliminar el pedido", error);
+      detailDialog.close();
+      toast(`${it.code} eliminado`);
+      await loadData();
     }
   });
 
@@ -478,7 +590,7 @@
       areas: options(AREAS, AREAS[0]),
       types: options(Object.keys(TYPES), "Pieza gráfica"),
       priorities: options(PRIORITIES, "Media"),
-      designers: designerOptions(UNASSIGNED),
+      designers: designerOptions(null),
     };
     $$("[data-options]", newForm).forEach((sel) => { sel.innerHTML = sources[sel.dataset.options]; });
   };
@@ -493,7 +605,7 @@
     newForm.elements.title.focus();
   };
 
-  newForm.addEventListener("submit", (e) => {
+  newForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = newForm.elements;
     const title = f.title.value.trim();
@@ -507,26 +619,27 @@
       return;
     }
     const link = f.link.value.trim();
-    const it = {
-      id: nextId(),
-      title,
-      brand: f.brand.value,
+    const row = {
+      titulo: title,
+      marca: f.brand.value,
       area: f.area.value,
-      type: f.type.value,
-      priority: f.priority.value,
-      designer: f.designer.value,
-      due: f.due.value,
-      status: "Nuevas",
-      print: f.print.checked,
-      link: /^https?:\/\//i.test(link) ? link : "",
-      description: f.description.value.trim(),
-      comments: [{ who: state.me, at: now(), text: "Creó la solicitud.", system: true }],
+      tipo: f.type.value,
+      prioridad: f.priority.value,
+      disenador: f.designer.value || null,
+      entrega: f.due.value,
+      impresion: f.print.checked,
+      link: /^https?:\/\//i.test(link) ? link : null,
+      descripcion: f.description.value.trim() || null,
     };
-    state.items.push(it);
-    save();
+    const btn = newForm.querySelector("button[type=submit]");
+    btn.disabled = true;
+    const { data, error } = await sb.from("mesa_pedidos").insert(row).select().single();
+    btn.disabled = false;
+    if (error) return fail("crear la solicitud", error);
+    await logChange(data.id, "Creó la solicitud.");
     newDialog.close();
-    render();
-    toast(`${it.id} creado en «Nuevas»`);
+    toast(`${code(data.id)} creado en «Nuevas»`);
+    await loadData();
   });
 
   newForm.elements.title.addEventListener("input", (e) => e.target.setCustomValidity(""));
@@ -556,23 +669,7 @@
   $("#search").addEventListener("input", (e) => { state.q = e.target.value; render(); });
   $("#fBrand").addEventListener("change", (e) => { state.brand = e.target.value; render(); });
   $("#fDesigner").addEventListener("change", (e) => { state.designer = e.target.value; render(); });
-
-  $("#me").addEventListener("change", (e) => {
-    state.me = e.target.value;
-    storage.set(ME_KEY, state.me);
-    render();
-    toast(`Usando la mesa como ${state.me}`);
-  });
-
   $("#newBtn").addEventListener("click", openNew);
-
-  $("#resetBtn").addEventListener("click", () => {
-    if (!confirm("¿Volver a los pedidos de ejemplo? Se pierden los cambios de esta demo.")) return;
-    state.items = seed();
-    save();
-    render();
-    toast("Demo restablecida");
-  });
 
   // Abrir detalle desde tarjeta o fila
   document.addEventListener("click", (e) => {
@@ -617,14 +714,28 @@
     moveTo(e.dataTransfer.getData("text/plain"), col.dataset.status);
   });
 
+  // Al volver a la pestaña, se ponen al día los datos
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.me) scheduleReload();
+  });
+
   /* ---------- Inicio ---------- */
 
-  $("#fBrand").insertAdjacentHTML("beforeend", options(BRANDS, ""));
-  $("#fDesigner").insertAdjacentHTML(
-    "beforeend",
-    Object.entries(TEAM).map(([k]) => `<option value="${k}">${k}</option>`).join("") + `<option value="${UNASSIGNED}">${UNASSIGNED}</option>`
-  );
-  $("#me").innerHTML = Object.keys(TEAM).map((k) => `<option value="${k}"${k === state.me ? " selected" : ""}>${k}</option>`).join("");
+  const fillStaticSelects = () => {
+    $("#fBrand").innerHTML = `<option value="">Todas las marcas</option>` + options(BRANDS, "");
+    $("#fDesigner").innerHTML =
+      `<option value="">Todo el equipo</option>` +
+      state.members.filter((m) => m.es_disenador).map((m) => `<option value="${esc(m.alias)}">${esc(m.alias)}</option>`).join("") +
+      `<option value="${NONE}">${UNASSIGNED}</option>`;
+  };
 
-  render();
+  if (!sb) {
+    showLogin("No se pudo cargar la conexión con la base de datos. Revisá tu conexión y recargá la página.");
+    return;
+  }
+
+  // INITIAL_SESSION, SIGNED_IN, SIGNED_OUT… (se difiere para no bloquear el cliente de auth)
+  sb.auth.onAuthStateChange((_event, session) => {
+    setTimeout(() => handleSession(session), 0);
+  });
 })();
