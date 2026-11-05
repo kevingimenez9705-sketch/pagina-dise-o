@@ -341,7 +341,8 @@
     e.preventDefault();
     const f = loginForm.elements;
     const rol = f.rol.value;
-    const clave = f.clave.value.trim();
+    // Sin importar mayúsculas ni tildes: "Diseño", "diseño" y "DISENO" valen lo mismo
+    const clave = f.clave.value.trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
     const nombre = f.nombre.value.trim().slice(0, 40);
     if (rol === "miembro" && !nombre) return showLogin("Escribí tu nombre: así firmás tus pedidos y comentarios.");
     if (!clave) return showLogin("Escribí la clave.");
