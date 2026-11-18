@@ -27,6 +27,7 @@
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
   </svg>
 
   <aside class="side">
@@ -39,12 +40,14 @@
 
     <div class="side__navs">
       <nav class="nav" aria-label="Mesa de diseño">
-        <button class="nav__item" type="button" data-nav="tablero"><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg>Tablero de pedidos</button>
-        <button class="nav__item" type="button" data-nav="mio"><svg class="ico" aria-hidden="true"><use href="#i-user" /></svg><span class="nav__label">Mi trabajo</span> <span class="nav__count" id="myCount">0</span></button>
-        <button class="nav__item" type="button" data-nav="todas"><svg class="ico" aria-hidden="true"><use href="#i-list" /></svg>Todas las solicitudes</button>
+        <button class="nav__item" type="button" data-nav="mio" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-user" /></svg><span class="nav__label">Mi mesa</span> <span class="nav__count" id="myCount">0</span></button>
+        <button class="nav__item" type="button" data-nav="tablero" data-only="area" hidden><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg><span class="nav__label">Tablero del área</span> <span class="nav__count" id="areaCount">0</span></button>
+        <button class="nav__item" type="button" data-nav="todas" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg><span class="nav__label">Todas las solicitudes</span></button>
+        <button class="nav__item" type="button" data-nav="enviados" data-only="area" hidden><svg class="ico" aria-hidden="true"><use href="#i-list" /></svg><span class="nav__label">Mis pedidos enviados</span></button>
       </nav>
       <p class="side__label">El área</p>
       <nav class="nav" aria-label="El área">
+        <button class="nav__item" type="button" data-nav="accesos" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>Perfiles y áreas</button>
         <a class="nav__item" href="equipo.html"><svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>Equipo</a>
         <a class="nav__item" href="panel-diseno.html"><svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>Perfil del área</a>
       </nav>
@@ -67,19 +70,20 @@
 
   <main class="main">
     <header class="crumbs">
-      <div>Espacio de trabajo <b>/</b> Diseño</div>
+      <div id="crumbs">Espacio de trabajo <b>/</b> Diseño</div>
       <span class="demo" id="liveBadge" data-state="off">Conectando…</span>
     </header>
 
     <section class="intro">
       <div>
-        <p class="eyebrow">De la idea a la entrega</p>
+        <p class="eyebrow" id="viewEyebrow">De la idea a la entrega</p>
         <h1 id="viewTitle">Tablero de pedidos</h1>
         <p id="viewSub">Todo lo que estamos creando, en un solo lugar.</p>
       </div>
       <button class="primary" type="button" id="newBtn"><svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>Nueva solicitud</button>
     </section>
 
+    <div id="workArea">
     <section class="stats" aria-label="Resumen">
       <div class="stat stat--dark"><div><small>Pedidos activos</small><strong id="stActive">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-stack" /></svg></em></div>
       <div class="stat"><div><small>En producción</small><strong id="stProd">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-clock" /></svg></em></div>
@@ -98,12 +102,67 @@
           <input type="search" id="search" placeholder="Buscar un pedido…" aria-label="Buscar un pedido" />
         </div>
         <select id="fBrand" aria-label="Filtrar por marca"><option value="">Todas las marcas</option></select>
+        <select id="fArea" aria-label="Filtrar por área" data-only="diseno" hidden><option value="">Todas las áreas</option></select>
         <select id="fDesigner" aria-label="Filtrar por diseñador"><option value="">Todo el equipo</option></select>
       </div>
     </div>
 
     <div id="board" class="board" role="tabpanel"></div>
     <div id="list" class="list" role="tabpanel" hidden></div>
+    </div>
+
+    <!-- Perfiles y áreas: solo Diseño -->
+    <section id="admin" class="admin" hidden aria-label="Perfiles y áreas">
+      <section class="panel" aria-labelledby="admDisTitle">
+        <header class="panel__head">
+          <div>
+            <h2 id="admDisTitle">Perfiles de Diseño</h2>
+            <p>Cada integrante entra con su perfil y su clave, y trabaja en su propia mesa. Los perfiles aparecen como botones en el ingreso.</p>
+          </div>
+          <button class="secondary" type="button" data-toggle-form="formDisenador"><svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>Agregar diseñador</button>
+        </header>
+        <form class="panel__form" id="formDisenador" hidden novalidate>
+          <label>Nombre corto
+            <input name="alias" maxlength="20" autocomplete="off" placeholder="Ej.: Sofi" />
+          </label>
+          <label>Nombre y apellido
+            <input name="nombre" maxlength="60" autocomplete="off" placeholder="Ej.: Sofía Pérez" />
+          </label>
+          <label>Clave personal
+            <input name="clave" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Mínimo 4 caracteres" />
+          </label>
+          <div class="panel__actions">
+            <button class="secondary" type="button" data-toggle-form="formDisenador">Cancelar</button>
+            <button class="primary" type="submit">Guardar</button>
+          </div>
+        </form>
+        <div class="people" id="adminDesigners"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="admAreaTitle">
+        <header class="panel__head">
+          <div>
+            <h2 id="admAreaTitle">Áreas solicitantes y claves</h2>
+            <p>Cada área entra con su propia clave y ve solo sus pedidos. Si cambiás la clave de un área, sus sesiones abiertas se cierran.</p>
+          </div>
+          <button class="secondary" type="button" data-toggle-form="formArea"><svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>Nueva área</button>
+        </header>
+        <form class="panel__form panel__form--area" id="formArea" hidden novalidate>
+          <label>Nombre del área
+            <input name="nombre" maxlength="60" autocomplete="off" placeholder="Ej.: Marketing" />
+          </label>
+          <label>Clave del área
+            <input name="clave" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Mínimo 4 caracteres" />
+          </label>
+          <div class="panel__actions">
+            <button class="secondary" type="button" data-toggle-form="formArea">Cancelar</button>
+            <button class="primary" type="submit">Crear área</button>
+          </div>
+        </form>
+        <div class="list" id="adminAreas"></div>
+        <p class="panel__note" id="adminLegacy" hidden></p>
+      </section>
+    </section>
 
     <footer class="foot">
       MESA DE DISEÑO · GASTRO BS AS
@@ -116,7 +175,7 @@
     <form id="newForm" novalidate>
       <div class="modal-head">
         <div>
-          <p class="eyebrow">Nueva solicitud</p>
+          <p class="eyebrow" id="newEyebrow">Nueva solicitud</p>
           <h2 id="newTitle">¿Qué necesitás que diseñemos?</h2>
         </div>
         <button class="close" type="button" data-close aria-label="Cerrar"><svg class="ico" aria-hidden="true"><use href="#i-x" /></svg></button>
@@ -128,7 +187,7 @@
         <label>Marca
           <select name="brand" data-options="brands"></select>
         </label>
-        <label>Área solicitante
+        <label id="newAreaField">Área solicitante
           <select name="area" data-options="areas"></select>
         </label>
         <label>Tipo de pieza
@@ -137,7 +196,7 @@
         <label>Prioridad
           <select name="priority" data-options="priorities"></select>
         </label>
-        <label id="newDesignerField">Diseñador
+        <label id="newDesignerField">Mesa de
           <select name="designer" data-options="designers"></select>
         </label>
         <label>Fecha de entrega
@@ -165,6 +224,29 @@
     <div id="detailBody"></div>
   </dialog>
 
+  <!-- Cambiar clave (perfil o área) -->
+  <dialog id="keyDialog" aria-labelledby="keyTitle">
+    <form id="keyForm" novalidate>
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Cambiar clave</p>
+          <h2 id="keyTitle">Nueva clave</h2>
+        </div>
+        <button class="close" type="button" data-close aria-label="Cerrar"><svg class="ico" aria-hidden="true"><use href="#i-x" /></svg></button>
+      </div>
+      <p class="key-help" id="keyHelp"></p>
+      <label>Nueva clave
+        <input name="clave" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Mínimo 4 caracteres" />
+      </label>
+      <p class="key-hint">No distingue mayúsculas ni tildes.</p>
+      <p class="auth__error" id="keyError" role="alert" hidden></p>
+      <div class="actions">
+        <button class="secondary" type="button" data-close>Cancelar</button>
+        <button class="primary" type="submit">Guardar clave</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Ingreso -->
   <section class="auth" id="auth" aria-labelledby="authTitle">
     <div class="auth__card">
@@ -176,19 +258,37 @@
         <fieldset class="roles">
           <legend class="sr-only">¿Cómo ingresás?</legend>
           <label class="role">
-            <input type="radio" name="rol" value="naza" checked />
-            <span><strong>Naza</strong><small>Diseño · maneja el tablero</small></span>
+            <input type="radio" name="tipo" value="diseno" checked />
+            <span><strong>Diseño</strong><small>Equipo · trabaja en su mesa</small></span>
           </label>
           <label class="role">
-            <input type="radio" name="rol" value="miembro" />
-            <span><strong>Miembro</strong><small>Pide y sigue solicitudes</small></span>
+            <input type="radio" name="tipo" value="area" />
+            <span><strong>Solicitante</strong><small>Áreas · pide y sigue solicitudes</small></span>
           </label>
         </fieldset>
-        <label id="nameField" hidden>Tu nombre
-          <input name="nombre" autocomplete="given-name" maxlength="40" placeholder="Así firmás tus pedidos y comentarios" />
+
+        <fieldset class="picker" id="designFields">
+          <legend class="field-label">Seleccioná tu perfil</legend>
+          <div class="profiles" id="designerPicker"><p class="picker__note">Cargando perfiles…</p></div>
+        </fieldset>
+
+        <div class="auth__group" id="areaFields" hidden>
+          <label>Área solicitante
+            <select name="area" id="areaSelect"><option value="">Cargando áreas…</option></select>
+          </label>
+          <label>Tu nombre y apellido
+            <input name="nombre" autocomplete="name" maxlength="40" placeholder="Ej.: Camila Gómez" />
+          </label>
+        </div>
+
+        <label><span id="keyLabel">Clave personal</span>
+          <span class="pass">
+            <input type="password" name="clave" autocomplete="current-password" spellcheck="false" />
+            <button class="pass__toggle" type="button" id="passToggle" aria-label="Mostrar clave" aria-pressed="false"><svg class="ico" aria-hidden="true"><use href="#i-eye" /></svg></button>
+          </span>
         </label>
-        <label>Clave
-          <input type="password" name="clave" autocomplete="current-password" required />
+        <label class="check remember">
+          <input type="checkbox" name="recordar" checked /> Mantener mi sesión iniciada en este equipo
         </label>
         <p class="auth__error" id="authError" role="alert" hidden></p>
         <button class="primary auth__submit" type="submit">Ingresar</button>
