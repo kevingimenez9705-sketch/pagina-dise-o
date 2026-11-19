@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mesa de Diseño · Gastro BS AS</title>
   <meta name="description" content="Mesa de Diseño: pedidos al equipo de Diseño Gráfico, de la idea a la entrega." />
-  <meta name="theme-color" content="#133c33" />
+  <meta name="theme-color" content="#11382b" />
   <link rel="icon" href="assetdise/favicon.svg" type="image/svg+xml" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,700..900&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="app.css" />
 </head>
 <body class="is-locked">
@@ -28,6 +25,12 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v12M6 11l6 6 6-6M4 21h16"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V8M6 13l6-6 6 6M4 3h16"/></symbol>
   </svg>
 
   <aside class="side">
@@ -40,14 +43,18 @@
 
     <div class="side__navs">
       <nav class="nav" aria-label="Mesa de diseño">
-        <button class="nav__item" type="button" data-nav="mio" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-user" /></svg><span class="nav__label">Mi mesa</span> <span class="nav__count" id="myCount">0</span></button>
-        <button class="nav__item" type="button" data-nav="tablero" data-only="area" hidden><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg><span class="nav__label">Tablero del área</span> <span class="nav__count" id="areaCount">0</span></button>
-        <button class="nav__item" type="button" data-nav="todas" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg><span class="nav__label">Todas las solicitudes</span></button>
-        <button class="nav__item" type="button" data-nav="enviados" data-only="area" hidden><svg class="ico" aria-hidden="true"><use href="#i-list" /></svg><span class="nav__label">Mis pedidos enviados</span></button>
+        <button class="nav__item" type="button" data-nav="mio" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-user" /></svg><span class="nav__label">Mi trabajo</span> <span class="nav__count" id="myCount">0</span></button>
+        <button class="nav__item" type="button" data-nav="tablero" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg><span class="nav__label">Tablero de pedidos</span></button>
+        <button class="nav__item" type="button" data-nav="general" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-list" /></svg><span class="nav__label">Tablero General</span></button>
+        <button class="nav__item" type="button" data-nav="area" data-only="area" hidden><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg><span class="nav__label">Tablero del área</span> <span class="nav__count" id="areaCount">0</span></button>
+        <button class="nav__item" type="button" data-nav="area" data-set-view="stats" data-only="area" hidden><svg class="ico" aria-hidden="true"><use href="#i-chart" /></svg><span class="nav__label">Estadísticas de mi área</span></button>
+      </nav>
+      <p class="side__label" data-only="diseno" hidden>Administración</p>
+      <nav class="nav" aria-label="Administración" data-only="diseno" hidden>
+        <button class="nav__item" type="button" data-nav="accesos"><svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>Perfiles y áreas</button>
       </nav>
       <p class="side__label">El área</p>
       <nav class="nav" aria-label="El área">
-        <button class="nav__item" type="button" data-nav="accesos" data-only="diseno" hidden><svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>Perfiles y áreas</button>
         <a class="nav__item" href="equipo.html"><svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>Equipo</a>
         <a class="nav__item" href="panel-diseno.html"><svg class="ico" aria-hidden="true"><use href="#i-file" /></svg>Perfil del área</a>
       </nav>
@@ -80,35 +87,70 @@
         <h1 id="viewTitle">Tablero de pedidos</h1>
         <p id="viewSub">Todo lo que estamos creando, en un solo lugar.</p>
       </div>
-      <button class="primary" type="button" id="newBtn"><svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>Nueva solicitud</button>
+      <button class="primary" type="button" id="newBtn"><svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg><span id="newBtnLabel">Nueva solicitud</span></button>
     </section>
 
     <div id="workArea">
-    <section class="stats" aria-label="Resumen">
-      <div class="stat stat--dark"><div><small>Pedidos activos</small><strong id="stActive">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-stack" /></svg></em></div>
-      <div class="stat"><div><small>En producción</small><strong id="stProd">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-clock" /></svg></em></div>
-      <div class="stat"><div><small>Esperando revisión</small><strong id="stReview">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-eye" /></svg></em></div>
-      <div class="stat"><div><small>Finalizados</small><strong id="stDone">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg></em></div>
-    </section>
-
-    <div class="toolbar">
-      <div class="tabs" role="tablist" aria-label="Vista">
-        <button type="button" role="tab" data-view="board" aria-controls="board"><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg>Tablero</button>
-        <button type="button" role="tab" data-view="list" aria-controls="list"><svg class="ico" aria-hidden="true"><use href="#i-list" /></svg>Lista</button>
+      <div class="scope" id="scopeBar" role="radiogroup" aria-label="Alcance de Mi trabajo" hidden>
+        <span class="scope__label">Ver</span>
+        <button type="button" role="radio" data-scope="mio">Mi mesa + x 2</button>
+        <button type="button" role="radio" data-scope="equipo">Equipo completo</button>
+        <button type="button" role="radio" data-scope="libres">Sin asignar</button>
       </div>
-      <div class="filters">
-        <div class="search">
-          <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
-          <input type="search" id="search" placeholder="Buscar un pedido…" aria-label="Buscar un pedido" />
+
+      <section class="stats" id="kpis" aria-label="Resumen">
+        <div class="stat stat--dark"><div><small>Pedidos activos</small><strong id="stActive">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-stack" /></svg></em></div>
+        <div class="stat"><div><small>En producción</small><strong id="stProd">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-clock" /></svg></em></div>
+        <div class="stat"><div><small>Falta info / Cambios</small><strong id="stReview">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-eye" /></svg></em></div>
+        <div class="stat"><div><small>Finalizados</small><strong id="stDone">00</strong></div><em><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg></em></div>
+      </section>
+
+      <div class="toolbar">
+        <div class="toolbar__row">
+          <div class="tabs" role="tablist" aria-label="Vista">
+            <button type="button" role="tab" data-view="board"><svg class="ico" aria-hidden="true"><use href="#i-grid" /></svg>Tablero</button>
+            <button type="button" role="tab" data-view="list" data-only="diseno"><svg class="ico" aria-hidden="true"><use href="#i-list" /></svg>Lista editable</button>
+            <button type="button" role="tab" data-view="stats"><svg class="ico" aria-hidden="true"><use href="#i-chart" /></svg><span id="statsTabLabel">Estadísticas</span></button>
+          </div>
+          <div class="filters">
+            <div class="search">
+              <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+              <input type="search" id="search" placeholder="Buscar pedido o ID…" aria-label="Buscar pedido o ID" />
+            </div>
+            <select id="fBrand" aria-label="Filtrar por marca"><option value="">Todas las marcas</option></select>
+            <select id="fArea" aria-label="Filtrar por área" data-only="diseno" hidden><option value="">Todas las áreas</option></select>
+            <select id="fDesigner" aria-label="Filtrar por asignado" data-only="diseno" hidden><option value="">Todo el equipo</option></select>
+            <select id="fDate" aria-label="Filtrar por fecha">
+              <option value="">Todo el historial</option>
+              <option value="day">Día puntual</option>
+              <option value="month">Mes puntual</option>
+              <option value="year">Año puntual</option>
+              <option value="range">Rango de fechas</option>
+            </select>
+          </div>
         </div>
-        <select id="fBrand" aria-label="Filtrar por marca"><option value="">Todas las marcas</option></select>
-        <select id="fArea" aria-label="Filtrar por área" data-only="diseno" hidden><option value="">Todas las áreas</option></select>
-        <select id="fDesigner" aria-label="Filtrar por diseñador"><option value="">Todo el equipo</option></select>
+        <div class="toolbar__sub" id="toolbarSub" hidden>
+          <div class="dates" id="dateControls" hidden>
+            <input type="date" id="fDay" aria-label="Día" hidden />
+            <select id="fMonth" aria-label="Mes" hidden></select>
+            <select id="fYear" aria-label="Año" hidden></select>
+            <span class="dates__range" id="fRange" hidden>
+              <label>Desde <input type="date" id="fFrom" /></label>
+              <label>Hasta <input type="date" id="fTo" /></label>
+            </span>
+          </div>
+          <div class="data-actions" id="dataActions" hidden>
+            <button class="secondary sm" type="button" id="exportCsv"><svg class="ico" aria-hidden="true"><use href="#i-down" /></svg>Exportar .csv</button>
+            <button class="secondary sm" type="button" id="exportXlsx"><svg class="ico" aria-hidden="true"><use href="#i-down" /></svg>Exportar .xlsx</button>
+            <button class="secondary sm" type="button" id="importXlsx"><svg class="ico" aria-hidden="true"><use href="#i-up" /></svg>Importar planilla</button>
+            <input type="file" id="importFile" accept=".xlsx,.xls" hidden />
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div id="board" class="board" role="tabpanel"></div>
-    <div id="list" class="list" role="tabpanel" hidden></div>
+      <div id="board" class="board" role="tabpanel"></div>
+      <div id="list" class="list" role="tabpanel" hidden></div>
+      <div id="stats" class="viz" role="tabpanel" hidden></div>
     </div>
 
     <!-- Perfiles y áreas: solo Diseño -->
@@ -170,7 +212,7 @@
     </footer>
   </main>
 
-  <!-- Nueva solicitud -->
+  <!-- Nueva solicitud (áreas) / Nuevo proyecto (Diseño) -->
   <dialog id="newDialog" aria-labelledby="newTitle">
     <form id="newForm" novalidate>
       <div class="modal-head">
@@ -180,47 +222,73 @@
         </div>
         <button class="close" type="button" data-close aria-label="Cerrar"><svg class="ico" aria-hidden="true"><use href="#i-x" /></svg></button>
       </div>
-      <div class="form-grid">
-        <label class="full">Título del pedido
-          <input name="title" required maxlength="120" placeholder="Ej.: Flyer de búsqueda para cocineros" />
+
+      <section class="block">
+        <div class="block__head"><span>1. Definición de la pieza</span><span class="block__badge" id="newAreaBadge"></span></div>
+        <label>Título del pedido
+          <input name="title" maxlength="120" placeholder="Ej.: Flyer de bienvenida, Manual operativo…" />
         </label>
-        <label>Marca
-          <select name="brand" data-options="brands"></select>
+        <p class="field-label" id="pieceLabel">Formato / tipo de pieza</p>
+        <div class="chips" id="pieceChips" role="radiogroup" aria-labelledby="pieceLabel"></div>
+        <label id="customPieceField" hidden>¿Qué pieza necesitás?
+          <input name="customPiece" maxlength="50" placeholder="Especificá qué pieza necesitás…" />
         </label>
-        <label id="newAreaField">Área solicitante
-          <select name="area" data-options="areas"></select>
+      </section>
+
+      <section class="block">
+        <div class="block__head"><span>2. Destino y fecha ideal</span></div>
+        <div class="scopes" id="destScopes" role="radiogroup" aria-label="Destino">
+          <button type="button" role="radio" data-dest="corporate"><strong>Interno / Gastro</strong><small>RR. HH., staff o general</small></button>
+          <button type="button" role="radio" data-dest="fabricas"><strong>Fábricas</strong><small>Planta y producción</small></button>
+          <button type="button" role="radio" data-dest="brand"><strong>Marca específica</strong><small>Sabores, Extremas, Manía…</small></button>
+        </div>
+        <div class="chips chips--brands" id="brandChips" role="radiogroup" aria-label="Marca" hidden></div>
+        <p class="field-label">Fecha ideal de entrega</p>
+        <div class="due">
+          <div class="chips" id="dueChips">
+            <button type="button" data-due="48h">En 48 hs</button>
+            <button type="button" data-due="week">Esta semana</button>
+            <button type="button" data-due="next">Próxima semana</button>
+          </div>
+          <input type="date" name="due" aria-label="Fecha ideal de entrega" />
+        </div>
+        <div class="form-grid" id="designExtras" hidden>
+          <label>Área solicitante
+            <select name="area"></select>
+          </label>
+          <label>Asignar a
+            <select name="assignee"></select>
+          </label>
+          <label>Prioridad
+            <select name="priority"></select>
+          </label>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="block__head"><span>3. Contenido y archivos</span></div>
+        <label>Indicaciones
+          <textarea name="description" maxlength="4000" placeholder="Textos finales, medidas, público y cualquier referencia clave…"></textarea>
         </label>
-        <label>Tipo de pieza
-          <select name="type" data-options="types"></select>
-        </label>
-        <label>Prioridad
-          <select name="priority" data-options="priorities"></select>
-        </label>
-        <label id="newDesignerField">Mesa de
-          <select name="designer" data-options="designers"></select>
-        </label>
-        <label>Fecha de entrega
-          <input type="date" name="due" required />
-        </label>
-        <label class="full">Descripción
-          <textarea name="description" placeholder="Contanos el objetivo, el público, los textos y cualquier dato que tengamos que respetar."></textarea>
-        </label>
-        <label class="full">Referencias o archivos (link)
+        <label>Link a la carpeta de insumos (opcional)
           <input type="url" name="link" placeholder="https://drive.google.com/…" />
         </label>
-        <label class="full check">
-          <input type="checkbox" name="print" /> Incluye material para imprimir
+        <label class="approval" id="approvalBox">
+          <input type="checkbox" name="approved" />
+          <span><strong>Confirmación obligatoria:</strong> Declaro que todo el contenido, textos e información compartida en este pedido ya se encuentran revisados y aprobados por mi área.</span>
         </label>
-      </div>
+      </section>
+
+      <p class="auth__error" id="newError" role="alert" hidden></p>
       <div class="actions">
         <button class="secondary" type="button" data-close>Cancelar</button>
-        <button class="primary" type="submit">Crear solicitud</button>
+        <button class="primary" type="submit" id="newSubmit">Enviar solicitud</button>
       </div>
     </form>
   </dialog>
 
-  <!-- Detalle -->
-  <dialog id="detailDialog" aria-labelledby="detailTitle">
+  <!-- Detalle: panel lateral -->
+  <dialog id="detailDialog" class="drawer" aria-labelledby="detailTitle">
     <div id="detailBody"></div>
   </dialog>
 
@@ -247,6 +315,7 @@
     </form>
   </dialog>
 
+  <div class="tip" id="vizTip" role="tooltip" hidden></div>
   <!-- Ingreso -->
   <section class="auth" id="auth" aria-labelledby="authTitle">
     <div class="auth__card">
