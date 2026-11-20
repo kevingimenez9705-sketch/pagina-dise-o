@@ -312,6 +312,62 @@
     if (e.target.closest("[data-view], .nav [data-nav], [data-scope]")) afterRender(enterVisible);
   });
 
+  /* ---------- Tablero: arrastrar el fondo y desplazamiento automático en los bordes ---------- */
+
+  if (board) {
+    let panning = false;
+    let startX = 0;
+    let startLeft = 0;
+    let moved = false;
+
+    board.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || e.target.closest(".card, button, a, select, input")) return;
+      if (board.scrollWidth <= board.clientWidth) return;
+      panning = true;
+      moved = false;
+      startX = e.pageX;
+      startLeft = board.scrollLeft;
+      board.classList.add("is-panning");
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!panning) return;
+      const dx = e.pageX - startX;
+      if (Math.abs(dx) > 3) moved = true;
+      board.scrollLeft = startLeft - dx * 1.35;
+    });
+    window.addEventListener("mouseup", () => {
+      if (!panning) return;
+      panning = false;
+      board.classList.remove("is-panning");
+    });
+    // Un arrastre del fondo no cuenta como clic
+    board.addEventListener("click", (e) => {
+      if (moved) {
+        e.stopPropagation();
+        moved = false;
+      }
+    }, true);
+
+    // Al llevar una tarjeta cerca del borde, el tablero se desplaza solo
+    let edgeSpeed = 0;
+    let edgeRaf = 0;
+    const edgeStep = () => {
+      if (!edgeSpeed) { edgeRaf = 0; return; }
+      board.scrollLeft += edgeSpeed;
+      edgeRaf = requestAnimationFrame(edgeStep);
+    };
+    board.addEventListener("dragover", (e) => {
+      const r = board.getBoundingClientRect();
+      const edge = 75;
+      edgeSpeed = e.clientX < r.left + edge ? -10 : e.clientX > r.right - edge ? 10 : 0;
+      if (edgeSpeed && !edgeRaf) edgeRaf = requestAnimationFrame(edgeStep);
+    });
+    const stopEdge = () => { edgeSpeed = 0; };
+    board.addEventListener("drop", stopEdge);
+    board.addEventListener("dragend", stopEdge);
+    board.addEventListener("dragleave", (e) => { if (!board.contains(e.relatedTarget)) stopEdge(); });
+  }
+
   /* ---------- Paleta de comandos (Ctrl + K / Cmd + K) ---------- */
 
   const ui = () => window.MesaUI;
