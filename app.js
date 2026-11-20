@@ -811,32 +811,37 @@
 
   /* ---------- Render: tablero ---------- */
 
-  const modsBadge = (it) =>
-    isDesigner() && it.mods > 0
-      ? `<span class="badge badge--mods" title="Modificaciones solicitadas (solo Diseño)"><svg class="ico" aria-hidden="true"><use href="#i-loop"/></svg>${it.mods} modif.</span>`
-      : "";
+  // Franja de urgencia según la prioridad (Urgente y Alta en coral, Media en ámbar, Baja en esmeralda)
+  const URGENCY = { "Urgente": "alta", "Alta": "alta", "Media": "media", "Baja": "baja", "A definir": "pend" };
 
   const cardHTML = (it) => {
     const late = isLate(it);
     const n = it.comments.filter((c) => !c.system).length;
     const free = isDesigner() && !it.assignee && it.status !== DONE;
-    const badges = [
-      it.linkFinal ? `<span class="badge badge--ok"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg>Archivo final</span>` : "",
-      modsBadge(it),
-    ].join("");
+    const u = URGENCY[it.priority] || "pend";
+    const label = it.priority === "A definir" ? "Prioridad a definir" : `Prioridad ${it.priority.toLowerCase()}`;
     return `
-      <article class="card${free ? " card--free" : ""}" tabindex="0" draggable="${isDesigner()}" data-id="${it.id}" aria-label="${esc(it.code)}: ${esc(it.title)}">
-        <div class="card-top"><span class="tag ${PIECE_CLASS[it.type] ?? ""}">${esc(it.type)}</span><span class="id">${esc(it.code)}</span></div>
-        <h3>${esc(it.title)}</h3>
-        <div class="type">${esc(it.brand)} · <b>${esc(it.area)}</b></div>
-        <span class="priority" data-p="${esc(it.priority)}">Prioridad ${esc(it.priority.toLowerCase())}</span>
-        ${badges ? `<div class="badges">${badges}</div>` : ""}
-        <div class="card-bottom">
-          <span class="who">${assigneeHTML(it)}</span>
-          <span class="meta-right">
-            ${n ? `<span class="comments-count" title="${n} comentario${n > 1 ? "s" : ""}"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>${n}</span>` : ""}
-            <span class="${late ? "late" : ""}" title="Fecha ideal de entrega">${late ? "Vencido · " : ""}${fmtDate(it.due)}</span>
-          </span>
+      <article class="card kcard u-${u}${free ? " card--free" : ""}" tabindex="0" draggable="${isDesigner()}" data-id="${it.id}" aria-label="${esc(it.code)}: ${esc(it.title)}">
+        <div class="kcard__head">
+          <span class="priority" data-p="${esc(it.priority)}">${esc(label)}</span>
+          <span class="kcard__id">${esc(it.code)}</span>
+        </div>
+        <div class="kcard__body">
+          <div class="kcard__row">
+            <span class="tag ${PIECE_CLASS[it.type] ?? ""}">${esc(it.type)}</span>
+            <span class="kcard__brand" title="${esc(it.brand)}">${esc(it.brand)}</span>
+          </div>
+          <h3>${esc(it.title)}</h3>
+          <div class="kcard__area">${esc(it.area)}</div>
+          ${it.linkFinal ? `<div class="badges"><span class="badge badge--ok"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg>Archivo final</span></div>` : ""}
+          <div class="kcard__foot">
+            <span class="who">${assigneeHTML(it)}</span>
+            <span class="meta-right">
+              ${isDesigner() && it.mods > 0 ? `<span class="kcard__mods" title="Modificaciones solicitadas (solo Diseño)">🔄 ${it.mods}</span>` : ""}
+              ${n ? `<span class="comments-count" title="${n} comentario${n > 1 ? "s" : ""}"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>${n}</span>` : ""}
+              <span class="${late ? "late" : ""}" title="Fecha ideal de entrega">${late ? "Vencido · " : ""}${fmtDate(it.due)}</span>
+            </span>
+          </div>
         </div>
       </article>`;
   };
@@ -859,7 +864,7 @@
       return `
         <section class="column" data-status="${esc(s.key)}" aria-label="${esc(s.key)}">
           <div class="column-head"><span class="dot" style="--color:${s.color}"></span>${esc(s.key)}<span class="count">${total}</span></div>
-          ${col.length ? col.map(cardHTML).join("") : `<div class="empty">Sin pedidos</div>`}
+          ${col.length ? col.map(cardHTML).join("") : `<div class="empty">${isDesigner() ? "Soltá una tarjeta aquí" : "Sin pedidos"}</div>`}
           ${more}
         </section>`;
     }).join("");
@@ -920,8 +925,6 @@
 
   /* ---------- Render: estadísticas ---------- */
 
-  const VIZ_1 = "var(--viz-1)"; // verde: serie principal / individual
-  const VIZ_2 = "var(--viz-2)"; // tierra: trabajos en conjunto
 
   const countBy = (list, key) => {
     const m = new Map();
@@ -932,8 +935,126 @@
     return m;
   };
 
-  const tile = (label, value, note = "") =>
-    `<div class="vtile"><small>${esc(label)}</small><strong>${value}</strong>${note ? `<span>${note}</span>` : ""}</div>`;
+  const tile = (label, value, note = "", cls = "") =>
+    `<div class="vtile ${cls}"><small>${esc(label)}</small><strong>${value}</strong>${note ? `<span>${note}</span>` : ""}</div>`;
+
+  // Lunes de la semana de una fecha ISO (para agrupar por semana)
+  const weekStart = (iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    return isoDay(dt);
+  };
+
+  // Espectro de volumen: una barra por semana (o por día si se filtra un mes), con los totales reales por mes
+  const spectrum = (list) => {
+    const dates = list.map((i) => i.start || i.end).filter(Boolean).sort();
+    if (!dates.length) return `<p class="viz__empty">Sin datos para estos filtros.</p>`;
+    const byMonthMode = state.date.mode === "month" && state.date.month;
+    const bars = [];
+    if (byMonthMode) {
+      const [y, m] = state.date.month.split("-").map(Number);
+      const days = new Date(y, m, 0).getDate();
+      const counts = countBy(dates.filter((d) => d.startsWith(state.date.month)).map((d) => ({ d })), "d");
+      for (let k = 1; k <= days; k++) {
+        const key = `${state.date.month}-${pad(k)}`;
+        bars.push({ key, month: state.date.month, value: counts.get(key) || 0, tip: `${k} ${MONTHS[m - 1]}` });
+      }
+    } else {
+      const counts = countBy(dates.map((d) => ({ w: weekStart(d) })), "w");
+      let w = weekStart(dates[0]);
+      const last = weekStart(dates[dates.length - 1]);
+      while (w <= last) {
+        bars.push({ key: w, month: w.slice(0, 7), value: counts.get(w) || 0, tip: `Semana del ${fmtDate(w)} ${w.slice(2, 4)}` });
+        w = addDays(w, 7);
+      }
+      bars.splice(0, Math.max(0, bars.length - 60));
+    }
+    const monthTotals = countBy(dates.map((d) => ({ m: d.slice(0, 7) })), "m");
+    const months = [...new Set(bars.map((b) => b.month))];
+    const peakMonth = months.reduce((a, b) => ((monthTotals.get(b) || 0) > (monthTotals.get(a) || 0) ? b : a), months[0]);
+    const max = Math.max(...bars.map((b) => b.value), 1);
+    const peakBar = bars.findIndex((b) => b.value === max);
+    const total = months.reduce((a, m) => a + (monthTotals.get(m) || 0), 0);
+    const peakLabel = byMonthMode
+      ? `PICO MÁXIMO · ${bars[peakBar].tip.toUpperCase()} (${max})`
+      : `PICO MÁXIMO · ${shortMonth(peakMonth).toUpperCase()} (${monthTotals.get(peakMonth) || 0})`;
+    const unit = (v) => `${v} ${v === 1 ? "proyecto" : "proyectos"}`;
+    return `
+      <span class="peak">${esc(peakLabel)}</span>
+      <div class="spec">
+        <div class="spec__plot">
+          ${bars.map((b, i) => `
+            <div class="spec__col" tabindex="0" data-tip="${esc(`${b.tip}: ${unit(b.value)}`)}">
+              ${i === peakBar ? `<span class="spec__callout"><b>${max}</b><small>${esc(byMonthMode ? b.tip : `sem. ${fmtDate(b.key)}`)}</small></span>` : ""}
+              <span class="spec__bar ${i === peakBar ? "is-needle" : b.month === peakMonth ? "is-hot" : ""}" style="height:${b.value ? Math.max(4, (b.value / max) * 100) : 2}%"></span>
+            </div>`).join("")}
+        </div>
+        <div class="spec__axis">
+          ${months.map((m) => `<span style="flex:${bars.filter((b) => b.month === m).length}"><em class="${m === peakMonth ? "is-hot" : ""}">${esc(byMonthMode ? monthLabel(m) : shortMonth(m))} · ${monthTotals.get(m) || 0}</em></span>`).join("")}
+        </div>
+      </div>
+      <details class="viz__table"><summary>Ver datos</summary>
+        <table><thead><tr><th scope="col">Período</th><th scope="col" class="r">Proyectos</th><th scope="col" class="r">Participación</th></tr></thead>
+        <tbody>${months.map((m) => `<tr><td>${esc(monthLabel(m))}</td><td class="r">${monthTotals.get(m) || 0}</td><td class="r">${num(((monthTotals.get(m) || 0) / (total || 1)) * 100)}%</td></tr>`).join("")}</tbody></table>
+      </details>`;
+  };
+
+  // Distribución por pieza: anillo con las 4 piezas principales + «Otros»
+  const DONUT_FILLS = ["url(#dzg1)", "url(#dzg2)", "url(#dzg3)", "url(#dzg4)", "url(#dzhatch)"];
+  const DONUT_SWATCH = [
+    "linear-gradient(180deg, #56f5b8, #17694e)",
+    "linear-gradient(180deg, #34d399, #0b3b2c)",
+    "linear-gradient(180deg, #e5d3b3, #7d6947)",
+    "linear-gradient(180deg, #7ee2be, #134635)",
+    "repeating-linear-gradient(45deg, rgba(110, 231, 183, 0.55) 0 2px, rgba(52, 211, 153, 0.14) 2px 5px)",
+  ];
+
+  const donut = (list, metrics) => {
+    if (!list.length) return `<p class="viz__empty">Sin datos para estos filtros.</p>`;
+    const rows = [...countBy(list, (i) => ((i.type || "").startsWith("Otro") ? "Otro" : i.type)).entries()]
+      .map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const parts = rows.slice(0, 4);
+    const rest = rows.slice(4).reduce((a, r) => a + r.value, 0);
+    if (rest) parts.push({ name: "Otros", value: rest, others: rows.slice(4).map((r) => r.name).join(", ") });
+    const total = list.length;
+    const R = 92;
+    const C = 2 * Math.PI * R;
+    const gap = parts.length > 1 ? 3 : 0;
+    let offset = 0;
+    const segs = parts.map((p, i) => {
+      const len = (p.value / total) * C;
+      const seg = `<circle class="donut__seg" cx="120" cy="120" r="${R}" fill="none" stroke="${DONUT_FILLS[i]}" stroke-width="30"
+        stroke-dasharray="${Math.max(0.5, len - gap)} ${C}" stroke-dashoffset="${-offset}" transform="rotate(-90 120 120)"
+        tabindex="0" data-tip="${esc(`${p.name}: ${p.value} (${pct(p.value, total)}%)${p.others ? ` · ${p.others}` : ""}`)}"></circle>`;
+      offset += len;
+      return seg;
+    }).join("");
+    return `
+      <div class="donut-grid">
+        <div class="donut-metrics">${metrics.map(([v, l]) => `<div><strong>${v}</strong><span>${esc(l)}</span></div>`).join("")}</div>
+        <div class="donut">
+          <svg viewBox="0 0 240 240" role="img" aria-label="${esc(parts.map((p) => `${p.name}: ${p.value}`).join(", "))}">
+            <defs>
+              <linearGradient id="dzg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#56f5b8"/><stop offset=".55" stop-color="#22b582"/><stop offset="1" stop-color="#0f5a43"/></linearGradient>
+              <linearGradient id="dzg2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset=".6" stop-color="#17694e"/><stop offset="1" stop-color="#0b3b2c"/></linearGradient>
+              <linearGradient id="dzg3" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#e5d3b3"/><stop offset=".55" stop-color="#b89f74"/><stop offset="1" stop-color="#7d6947"/></linearGradient>
+              <linearGradient id="dzg4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7ee2be"/><stop offset=".55" stop-color="#2e8b6b"/><stop offset="1" stop-color="#134635"/></linearGradient>
+              <pattern id="dzhatch" width="8" height="8" patternTransform="rotate(42)" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="rgba(52,211,153,0.14)"/><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(110,231,183,0.55)" stroke-width="2.2"/></pattern>
+            </defs>
+            <circle cx="120" cy="120" r="${R}" fill="none" stroke="var(--line)" stroke-width="30"></circle>
+            ${segs}
+          </svg>
+          <div class="donut__center"><strong>${total}</strong><span>Proyectos totales</span></div>
+        </div>
+        <ul class="donut-legend">
+          ${parts.map((p, i) => `
+            <li tabindex="0" data-tip="${esc(`${p.name}: ${p.value} (${pct(p.value, total)}%)${p.others ? ` · ${p.others}` : ""}`)}">
+              <i style="background:${DONUT_SWATCH[i]}"></i><span>${esc(p.name)}</span><b>${p.value}</b><em>${pct(p.value, total)}%</em>
+            </li>`).join("")}
+        </ul>
+      </div>`;
+  };
 
   // Barras horizontales ordenadas (una sola serie, un solo color)
   const rankedBars = (rows, { unit = ["proyecto", "proyectos"], fmt = (v) => v, max: maxRows = 8, total } = {}) => {
@@ -956,29 +1077,6 @@
     }).join("")}</ul>`;
   };
 
-  // Columnas por período (una sola serie)
-  const columns = (points, { unit = ["proyecto", "proyectos"] } = {}) => {
-    if (!points.length) return `<p class="viz__empty">Sin datos para estos filtros.</p>`;
-    const max = Math.max(...points.map((p) => p.value), 1);
-    const labelAll = points.length <= 14;
-    const maxIdx = points.findIndex((p) => p.value === max);
-    return `
-      <div class="cols" style="--n:${points.length}">
-        <div class="cols__plot">
-          ${points.map((p, i) => `
-            <div class="col" tabindex="0" data-tip="${esc(`${p.full}: ${p.value} ${p.value === 1 ? unit[0] : unit[1]}`)}">
-              <span class="col__val">${labelAll || i === maxIdx ? p.value || "" : ""}</span>
-              <span class="col__bar" style="height:${p.value ? Math.max(2, (p.value / max) * 100) : 0}%"></span>
-            </div>`).join("")}
-        </div>
-        <div class="cols__axis">${points.map((p, i) => `<span>${points.length > 16 && i % 2 ? "" : esc(p.label)}</span>`).join("")}</div>
-      </div>
-      <details class="viz__table"><summary>Ver datos</summary>
-        <table><thead><tr><th scope="col">Período</th><th scope="col" class="r">Proyectos</th></tr></thead>
-        <tbody>${points.map((p) => `<tr><td>${esc(p.full)}</td><td class="r">${p.value}</td></tr>`).join("")}</tbody></table>
-      </details>`;
-  };
-
   // Barra segmentada (un total partido en dos o tres partes)
   const segmented = (parts) => {
     const total = parts.reduce((a, p) => a + p.value, 0);
@@ -991,32 +1089,6 @@
         }).join("")}
       </div>
       <ul class="legend">${parts.map((p) => `<li><i style="--c:${p.color}"></i>${esc(p.name)} <b>${p.value}</b></li>`).join("")}</ul>`;
-  };
-
-  const periodPoints = (list) => {
-    const mode = state.date.mode;
-    const dateOf = (i) => i.start || i.end;
-    if (mode === "month" && state.date.month) {
-      const [y, m] = state.date.month.split("-").map(Number);
-      const days = new Date(y, m, 0).getDate();
-      const counts = countBy(list.filter((i) => (dateOf(i) || "").startsWith(state.date.month)), (i) => Number(dateOf(i).slice(8, 10)));
-      return Array.from({ length: days }, (_, k) => ({
-        label: String(k + 1), full: `${k + 1} ${MONTHS[m - 1]}`, value: counts.get(k + 1) || 0,
-      }));
-    }
-    const months = list.map(dateOf).filter(Boolean).map((d) => d.slice(0, 7)).sort();
-    if (!months.length) return [];
-    const counts = countBy(months.map((m) => ({ m })), "m");
-    const out = [];
-    let [y, m] = months[0].split("-").map(Number);
-    const [ly, lm] = months[months.length - 1].split("-").map(Number);
-    while (y < ly || (y === ly && m <= lm)) {
-      const key = `${y}-${pad(m)}`;
-      out.push({ label: shortMonth(key), full: monthLabel(key), value: counts.get(key) || 0 });
-      m += 1;
-      if (m > 12) { m = 1; y += 1; }
-    }
-    return out.slice(-18);
   };
 
   const card = (title, sub, body, wide = false) =>
@@ -1034,7 +1106,7 @@
       : state.me.area;
 
     const tiles = [
-      tile("Proyectos", list.length, esc(scopeName)),
+      tile("Proyectos", list.length, esc(scopeName), "vtile--hero"),
       tile("Finalizados", done.length, `${pct(done.length, list.length)}% del total`),
       tile("Tiempo promedio", avgDays === null ? "—" : `${num(avgDays)} días`, "de inicio a finalización"),
       design
@@ -1046,25 +1118,32 @@
 
     const toRows = (map) => [...map.entries()].map(([name, value]) => ({ name: name || "—", value })).sort((a, b) => b.value - a.value);
     const sections = [];
-    const periodSub = state.date.mode === "month" ? "Proyectos por día según la fecha de inicio" : "Proyectos por mes según la fecha de inicio";
-    sections.push(card("Volumen por período", periodSub, columns(periodPoints(list)), true));
+    const periodSub = state.date.mode === "month" ? "Proyectos por día según la fecha de inicio" : "Proyectos por semana según la fecha de inicio, con el total de cada mes";
+    sections.push(card("Volumen por período", periodSub, spectrum(list), true));
 
     if (design) {
       sections.push(card("Modalidad", "Individual o en conjunto (x 2)", segmented([
-        { name: "Individual", value: list.length - joint, color: VIZ_1 },
-        { name: "x 2 (en conjunto)", value: joint, color: VIZ_2 },
+        { name: "Individual", value: list.length - joint, color: "var(--seg-1)" },
+        { name: "x 2 (en conjunto)", value: joint, color: "var(--seg-2)" },
       ])));
-      if (!(state.nav === "mio" && myScope() === "mio")) {
-        const who = countBy(list, (i) => i.assignee || UNASSIGNED);
-        sections.push(card("Por asignado", "Cuántos proyectos tiene cada mesa", rankedBars(toRows(who), { total: list.length })));
-      }
     } else {
       const byStatus = STATUSES.map((s) => ({ name: s.key, value: list.filter((i) => i.status === s.key).length })).filter((r) => r.value);
       sections.push(card("Estado de los pedidos", "En qué etapa está cada pedido del área", rankedBars(byStatus, { max: 6, total: list.length })));
     }
-
     sections.push(card("Demanda por marca", "Proyectos por marca o ámbito", rankedBars(toRows(countBy(list, "brand")), { total: list.length })));
+
+    sections.push(card("Distribución por pieza", "Entregas por formato y eficiencia del período", donut(list, [
+      [done.length, "proyectos finalizados"],
+      [`${pct(done.length, list.length)}%`, "tasa de cumplimiento"],
+      [avgDays === null ? "—" : `${num(avgDays)} d`, "tiempo medio de entrega"],
+      design ? [joint, "trabajos en conjunto (x 2)"] : [list.filter((i) => i.linkFinal).length, "con archivo final"],
+    ]), true));
+
     if (design) {
+      if (!(state.nav === "mio" && myScope() === "mio")) {
+        const who = countBy(list, (i) => i.assignee || UNASSIGNED);
+        sections.push(card("Por asignado", "Cuántos proyectos tiene cada mesa", rankedBars(toRows(who), { total: list.length })));
+      }
       sections.push(card("Demanda por área", "Proyectos por área solicitante", rankedBars(toRows(countBy(list, "area")), { total: list.length })));
       const rework = [...countBy(list, "area").keys()].map((name) => {
         const of = list.filter((i) => i.area === name);
@@ -1076,7 +1155,6 @@
           ? rankedBars(rework, { unit: ["ronda por proyecto", "rondas por proyecto"], fmt: avgFmt })
           : `<p class="viz__empty">Todavía no hay modificaciones registradas en estos proyectos.</p>`));
     }
-    sections.push(card("Tipo de pieza", "Qué formatos se piden más", rankedBars(toRows(countBy(list, (i) => (i.type || "").startsWith("Otro") ? "Otro" : i.type)), { total: list.length })));
 
     $("#stats").innerHTML = `<div class="vtiles">${tiles}</div><div class="vgrid">${sections.join("")}</div>`;
   };
