@@ -861,7 +861,8 @@
       $("#list").innerHTML = `<div class="empty">${emptyText()}</div>`;
       return;
     }
-    const sorted = [...items].sort((a, b) => (a.status === DONE) - (b.status === DONE) || b.codigo - a.codigo);
+    // Orden fijo por código, como una planilla: cambiar el estado no mueve la fila
+    const sorted = [...items].sort((a, b) => b.codigo - a.codigo);
     const shown = sorted.slice(0, state.listLimit);
     $("#list").innerHTML = `
       <table class="sheet">
