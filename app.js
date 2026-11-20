@@ -304,12 +304,24 @@
   };
 
   let toastTimer;
-  const toast = (msg) => {
+  const toast = (msg, action) => {
     const el = $("#toast");
     el.textContent = msg;
+    el.classList.toggle("has-action", Boolean(action));
+    if (action) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "toast__undo";
+      b.textContent = action.label || "Deshacer";
+      b.addEventListener("click", () => {
+        el.classList.remove("show", "has-action");
+        action.run();
+      }, { once: true });
+      el.appendChild(b);
+    }
     el.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove("show"), 3200);
+    toastTimer = setTimeout(() => el.classList.remove("show", "has-action"), action ? 5200 : 3200);
   };
 
   /* ---------- Supabase ---------- */
@@ -379,7 +391,8 @@
     (d.comentarios || []).forEach((r) => {
       byId.get(r.pedido_id)?.comments.push({ who: r.autor, at: r.created_at, text: r.texto, system: r.sistema });
     });
-    const next = [...byId.values()];
+    // Los que están por borrarse (con «Deshacer» disponible) no vuelven a aparecer
+    const next = [...byId.values()].filter((i) => !pendingDeletes.has(i.id));
 
     // Aviso de pedidos nuevos cargados por otra persona
     if (state.loaded) {
@@ -561,8 +574,10 @@
   };
 
   const logout = (msg) => {
-    // Al tocar «Salir» se cierra la sesión también en la base
-    if (state.token && !msg) sb.rpc("mesa_cerrar_sesion", { p_token: state.token }).then(() => {}, () => {});
+    // Primero se confirman los borrados pendientes; después, al tocar «Salir», se cierra la sesión en la base
+    const token = state.token;
+    const flushing = flushDeletes();
+    if (token && !msg) flushing.then(() => sb.rpc("mesa_cerrar_sesion", { p_token: token })).then(() => {}, () => {});
     disconnectLive();
     stored.clear();
     Object.assign(state, { token: null, me: null, admin: null, items: [], loaded: false, nav: null, view: "board", openId: null });
@@ -830,7 +845,9 @@
   const byEndDesc = (a, b) => (b.end || b.start || "").localeCompare(a.end || a.start || "") || b.codigo - a.codigo;
 
   const renderBoard = (items) => {
-    $("#board").innerHTML = STATUSES.map((s) => {
+    const boardEl = $("#board");
+    const keepLeft = boardEl.scrollLeft;
+    boardEl.innerHTML = STATUSES.map((s) => {
       let col = items.filter((i) => i.status === s.key);
       col.sort(s.key === DONE ? byEndDesc : byDue);
       const total = col.length;
@@ -846,6 +863,7 @@
           ${more}
         </section>`;
     }).join("");
+    boardEl.scrollLeft = keepLeft;
   };
 
   /* ---------- Render: lista editable (Diseño) ---------- */
@@ -902,8 +920,8 @@
 
   /* ---------- Render: estadísticas ---------- */
 
-  const VIZ_1 = "#0f8060"; // verde: serie principal / individual
-  const VIZ_2 = "#c0843a"; // tierra: trabajos en conjunto
+  const VIZ_1 = "var(--viz-1)"; // verde: serie principal / individual
+  const VIZ_2 = "var(--viz-2)"; // tierra: trabajos en conjunto
 
   const countBy = (list, key) => {
     const m = new Map();
@@ -1163,16 +1181,27 @@
     return `${it.code} actualizado`;
   };
 
-  const quickEdit = async (id, cambios) => {
+  // Valores previos para poder deshacer un cambio de estado, asignado o prioridad
+  const undoFor = (it, cambios) => {
+    const prev = {};
+    if ("estado" in cambios) Object.assign(prev, { estado: it.status, modificaciones: it.mods });
+    if ("asignado" in cambios) prev.asignado = it.assignee || "";
+    if ("prioridad" in cambios) prev.prioridad = it.priority;
+    return Object.keys(prev).length ? prev : null;
+  };
+
+  const quickEdit = async (id, cambios, { undo = true } = {}) => {
     const it = find(id);
     if (!it) return;
     if (!isDesigner()) return toast("Solo el equipo de Diseño puede hacer ese cambio.");
+    const prev = undo ? undoFor(it, cambios) : null;
     applyLocal(it, cambios);
     render();
     try {
       await rpc("mesa_pedido_editar", { p_id: it.id, p_cambios: cambios });
       notify();
-      toast(editMsg(it, cambios));
+      toast(undo ? editMsg(it, cambios) : `${it.code}: cambio deshecho`,
+        prev ? { label: "Deshacer", run: () => quickEdit(it.id, prev, { undo: false }) } : null);
       scheduleRefresh();
     } catch (e) {
       handleError("guardar el cambio", e);
@@ -1180,17 +1209,46 @@
     }
   };
 
-  const removeItem = async (it) => {
+  // La tarjeta desaparece al instante; la base la borra a los 5 s salvo que se toque «Deshacer»
+  const pendingDeletes = new Map();
+
+  const commitDelete = async (id) => {
+    const p = pendingDeletes.get(id);
+    if (!p) return;
+    pendingDeletes.delete(id);
+    clearTimeout(p.timer);
     try {
-      await rpc("mesa_pedido_eliminar", { p_id: it.id });
+      await rpc("mesa_pedido_eliminar", { p_id: id });
       notify();
-      if (detailDialog.open && state.openId === it.id) detailDialog.close();
-      toast(`${it.code} eliminado de todos los tableros.`);
-      await fetchData();
     } catch (e) {
-      handleError("eliminar el pedido", e);
+      if (state.token) handleError("eliminar el pedido", e);
     }
+    refresh();
   };
+
+  const removeItem = (it) => {
+    if (detailDialog.open && state.openId === it.id) detailDialog.close();
+    state.items = state.items.filter((i) => i.id !== it.id);
+    render();
+    pendingDeletes.set(it.id, { timer: setTimeout(() => commitDelete(it.id), 5000) });
+    toast(`${it.code} eliminado de todos los tableros.`, {
+      label: "Deshacer",
+      run: () => {
+        const p = pendingDeletes.get(it.id);
+        if (!p) return;
+        clearTimeout(p.timer);
+        pendingDeletes.delete(it.id);
+        toast(`${it.code} recuperado.`);
+        state.loaded = false; // que no lo anuncie como pedido nuevo
+        refresh();
+      },
+    });
+  };
+
+  // Si se cierra o se oculta la pestaña, los borrados pendientes se confirman en el momento
+  const flushDeletes = () => Promise.all([...pendingDeletes.keys()].map(commitDelete));
+  window.addEventListener("pagehide", flushDeletes);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushDeletes(); });
 
   // Eliminación en dos pasos: el primer clic arma el botón, el segundo confirma
   const armDelete = (btn, it, label) => {
@@ -1923,6 +1981,14 @@
   });
 
   /* ---------- Inicio ---------- */
+
+  // Lectura para la capa visual (paleta Ctrl+K): no modifica nada
+  window.MesaUI = {
+    ready: () => Boolean(state.me),
+    designer: () => isDesigner(),
+    items: () => state.items.map((i) => ({ id: i.id, code: i.code, title: i.title, status: i.status, area: i.area })),
+    open: (id) => openDetail(id),
+  };
 
   if (!sb) {
     lock();
