@@ -93,7 +93,8 @@
     detailDirty: false,
     dMods: 0,
     keyTarget: null,
-    nf: { piece: "Pieza gráfica", dest: "corporate", brand: BRANDS[0] },
+    nf: { piece: "Pieza gráfica", dest: "corporate", brand: BRANDS[0], subs: [], subsOpen: false },
+    detailUI: { req: false, subs: true, older: false },
     login: { disenadores: [], areas: [] },
   };
 
@@ -376,6 +377,8 @@
     end: r.fecha_fin,
     origin: r.origen,
     createdBy: r.creado_por,
+    subs: Array.isArray(r.subtareas) ? r.subtareas : [],
+    orden: r.orden ?? null,
     comments: [],
   });
 
@@ -533,6 +536,7 @@
     showAuthError(msg);
     prefillLogin();
     loadLoginOptions();
+    appReady();
   };
 
   loginForm.addEventListener("change", (e) => {
@@ -549,6 +553,9 @@
     e.currentTarget.setAttribute("aria-pressed", String(show));
     e.currentTarget.setAttribute("aria-label", show ? "Ocultar clave" : "Mostrar clave");
   });
+
+  // Avisa a la pantalla de carga que ya se puede mostrar la página
+  const appReady = () => window.dispatchEvent(new Event("mesa:ready"));
 
   const start = async (session) => {
     state.token = session.token;
@@ -570,6 +577,7 @@
     document.body.classList.remove("is-locked");
     render();
     connectLive();
+    appReady();
     return true;
   };
 
@@ -823,7 +831,7 @@
     return `
       <article class="card kcard u-${u}${free ? " card--free" : ""}" tabindex="0" draggable="${isDesigner()}" data-id="${it.id}" aria-label="${esc(it.code)}: ${esc(it.title)}">
         <div class="kcard__head">
-          <span class="priority" data-p="${esc(it.priority)}">${esc(label)}</span>
+          <span class="priority" data-p="${esc(it.priority)}">${it.priority === "Urgente" ? `<i class="beacon" aria-hidden="true"></i>` : ""}${esc(label)}</span>
           <span class="kcard__id">${esc(it.code)}</span>
         </div>
         <div class="kcard__body">
@@ -849,12 +857,20 @@
   const byDue = (a, b) => (a.due || "9").localeCompare(b.due || "9") || b.codigo - a.codigo;
   const byEndDesc = (a, b) => (b.end || b.start || "").localeCompare(a.end || a.start || "") || b.codigo - a.codigo;
 
+  // Orden de una columna: primero las que todavía no tienen lugar manual (las nuevas o recién movidas),
+  // después las que Diseño acomodó a mano, en ese orden
+  const sortColumn = (list, status) => list.sort((a, b) => {
+    if (a.orden == null && b.orden == null) return (status === DONE ? byEndDesc : byDue)(a, b);
+    if (a.orden == null) return -1;
+    if (b.orden == null) return 1;
+    return a.orden - b.orden;
+  });
+
   const renderBoard = (items) => {
     const boardEl = $("#board");
     const keepLeft = boardEl.scrollLeft;
     boardEl.innerHTML = STATUSES.map((s) => {
-      let col = items.filter((i) => i.status === s.key);
-      col.sort(s.key === DONE ? byEndDesc : byDue);
+      let col = sortColumn(items.filter((i) => i.status === s.key), s.key);
       const total = col.length;
       let more = "";
       if (s.key === DONE && !state.showAllDone && total > FINAL_CAP) {
@@ -864,8 +880,10 @@
       return `
         <section class="column" data-status="${esc(s.key)}" aria-label="${esc(s.key)}">
           <div class="column-head"><span class="dot" style="--color:${s.color}"></span>${esc(s.key)}<span class="count">${total}</span></div>
-          ${col.length ? col.map(cardHTML).join("") : `<div class="empty">${isDesigner() ? "Soltá una tarjeta aquí" : "Sin pedidos"}</div>`}
-          ${more}
+          <div class="column-body">
+            ${col.length ? col.map(cardHTML).join("") : `<div class="empty">${isDesigner() ? "Soltá una tarjeta aquí" : "Sin pedidos"}</div>`}
+            ${more}
+          </div>
         </section>`;
     }).join("");
     boardEl.scrollLeft = keepLeft;
@@ -1246,6 +1264,7 @@
     if ("modificaciones" in cambios) it.mods = cambios.modificaciones;
     if ("link_final" in cambios) it.linkFinal = cambios.link_final || null;
     if ("observaciones" in cambios) it.notes = cambios.observaciones || null;
+    if ("subtareas" in cambios) it.subs = cambios.subtareas;
   };
 
   const editMsg = (it, cambios) => {
@@ -1352,84 +1371,246 @@
 
   const detailDialog = $("#detailDialog");
 
+  // Subtareas: {t: título, p: página, l: link, ok: lista}
+  const pageLabel = (p) => (!p ? "" : /^\d+$/.test(p) ? `Pág. ${p}` : p);
+  const parseSubLines = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
+    const m = line.match(/^p[aá]g(?:ina)?\.?\s*(\d+)\s*[-:–]?\s*(.+)$/i);
+    return m ? { t: m[2].trim(), p: m[1], l: "", ok: false } : { t: line, p: "", l: "", ok: false };
+  });
+  const subsDone = (subs) => subs.filter((s) => s.ok).length;
+
+  const brandOptions = (selected) => {
+    const list = [...new Set([CORPORATE, FACTORIES, ...BRANDS, ...state.items.map((i) => i.brand)])].filter(Boolean);
+    if (selected && !list.includes(selected)) list.push(selected);
+    return options(list, selected);
+  };
+  const pieceOptions = (selected) => {
+    const list = PIECES.map(([p]) => p).filter((p) => p !== "Otro");
+    if (selected && !list.includes(selected)) list.push(selected);
+    return options(list, selected);
+  };
+
+  const subsListHTML = (it) => {
+    const design = isDesigner();
+    if (!it.subs.length) return `<p class="subs__empty">Sin subtareas cargadas todavía.</p>`;
+    return it.subs.map((s, n) => `
+      <div class="sub${s.ok ? " is-done" : ""}" data-sub="${n}">
+        <label class="sub__main">
+          <input type="checkbox" data-sub-ok${s.ok ? " checked" : ""}${design ? "" : " disabled"} aria-label="Marcar «${esc(s.t)}» como lista" />
+          ${s.p ? `<span class="sub__page">${esc(pageLabel(s.p))}</span>` : ""}
+          <span class="sub__t">${esc(s.t)}</span>
+        </label>
+        <span class="sub__acts">
+          ${s.l ? `<a class="sub__link" href="${esc(s.l)}" target="_blank" rel="noopener noreferrer">🔗 Link</a>` : ""}
+          ${design ? `<button class="sub__del" type="button" data-sub-del aria-label="Quitar «${esc(s.t)}»">✕</button>` : ""}
+        </span>
+      </div>`).join("");
+  };
+
+  const renderSubs = (it) => {
+    const list = $("#subsList");
+    if (!list) return;
+    const done = subsDone(it.subs);
+    const total = it.subs.length;
+    list.innerHTML = subsListHTML(it);
+    $("#subsBadge").textContent = `${done} / ${total} lista${total === 1 ? "" : "s"}`;
+    $("#subsBar").style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+  };
+
+  // Las subtareas se guardan al instante (no esperan a «Guardar cambios»)
+  const saveSubs = async (it, next, msg) => {
+    const prev = it.subs;
+    it.subs = next;
+    renderSubs(it);
+    try {
+      await rpc("mesa_pedido_editar", { p_id: it.id, p_cambios: { subtareas: next } });
+      notify();
+      if (msg) toast(msg);
+      scheduleRefresh();
+    } catch (e) {
+      it.subs = prev;
+      renderSubs(it);
+      handleError("guardar la subtarea", e);
+    }
+  };
+
+  const OLDER_SHOWN = 3;
+
   const renderDetail = () => {
     const it = find(state.openId);
     if (!it) return;
     const late = isLate(it);
     const design = isDesigner();
+    const d = state.detailUI;
     state.dMods = it.mods;
     state.detailDirty = false;
+    const done = subsDone(it.subs);
+    const comments = [...it.comments].reverse();
+    const older = comments.length - OLDER_SHOWN;
+    const commentHTML = (c) => `
+      <div class="comment${c.system ? " comment--system" : ""}"><small>${avatar(c.who)}${esc(c.who)} · ${fmtStamp(c.at)}</small><span class="comment__text">${esc(c.text)}</span></div>`;
+    const wrapOpen = design ? `<form class="dform" id="editForm" novalidate>` : `<div class="dform">`;
+    const wrapClose = design ? `</form>` : `</div>`;
+
     $("#detailBody").innerHTML = `
-      <div class="drawer__head">
-        <div class="drawer__chips"><span class="chip chip--dark">${esc(it.code)}</span><span class="chip">${esc(it.area)}</span></div>
-        <button class="close" type="button" data-close aria-label="Cerrar"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
-      </div>
-      <h2 id="detailTitle">${esc(it.title)}</h2>
-      <div class="detail-meta">
-        <span class="pill"><b>Marca</b>${esc(it.brand)}</span>
-        <span class="pill"><b>Pieza</b>${esc(it.type)}</span>
-        <span class="pill"><b>Pidió</b>${esc(it.createdBy)}</span>
-        <span class="pill ${late ? "late" : ""}"><b>Entrega ideal</b>${late ? "Vencido · " : ""}${fmtFullDate(it.due)}</span>
-        ${it.start ? `<span class="pill"><b>Inicio</b>${fmtFullDate(it.start)}</span>` : ""}
-        ${it.end ? `<span class="pill"><b>Finalizado</b>${fmtFullDate(it.end)}</span>` : ""}
+      <div class="drawer__top">
+        <div class="drawer__head">
+          <div class="drawer__chips">
+            <span class="chip chip--dark">${esc(it.code)}</span>
+            <span class="chip" id="dAreaChip">${esc(it.area)}</span>
+            <span class="chip chip--prio" data-p="${esc(it.priority)}"><i aria-hidden="true"></i>${esc(it.priority)}</span>
+          </div>
+          <button class="close" type="button" data-close aria-label="Cerrar"><svg class="ico" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+        ${design ? `
+          <label class="sr-only" for="dTitle">Título del pedido</label>
+          <input id="dTitle" class="drawer__title-input" name="titulo" form="editForm" maxlength="160" value="${esc(it.title)}" />
+          <h2 id="detailTitle" class="sr-only">${esc(it.title)}</h2>` : `<h2 id="detailTitle">${esc(it.title)}</h2>`}
+        <p class="dmeta">
+          <span>Pidió: <b>${esc(it.createdBy || "—")}</b></span>
+          <span>Marca: <b id="dMetaBrand">${esc(it.brand)}</b></span>
+          <span>Pieza: <b id="dMetaPiece">${esc(it.type)}</b></span>
+          <span>Entrega: <b id="dMetaDue" class="${late ? "late" : "ok"}">${late ? "Vencido · " : ""}${fmtFullDate(it.due)}</b></span>
+          ${it.start ? `<span>Inicio: <b>${fmtFullDate(it.start)}</b></span>` : ""}
+          ${it.end ? `<span>Finalizado: <b>${fmtFullDate(it.end)}</b></span>` : ""}
+        </p>
         ${design ? "" : `
-          <span class="pill"><span class="dot" style="--color:${statusColor(it.status)}"></span>${esc(it.status)}</span>
-          <span class="pill"><b>Mesa</b>${esc(it.assignee || UNASSIGNED)}</span>
-          <span class="pill"><b>Prioridad</b>${esc(it.priority)}</span>`}
+          <div class="detail-meta">
+            <span class="pill"><span class="dot" style="--color:${statusColor(it.status)}"></span>${esc(it.status)}</span>
+            <span class="pill"><b>Mesa</b>${esc(it.assignee || UNASSIGNED)}</span>
+          </div>`}
       </div>
-      <section class="detail-section">
-        <h4>Indicaciones</h4>
-        <p>${it.description ? esc(it.description) : "Sin indicaciones."}</p>
-        ${it.link ? `<a class="ref" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>Ver insumos adjuntos</a>` : ""}
-      </section>
-      ${it.linkFinal ? `
-        <a class="deliverable" href="${esc(it.linkFinal)}" target="_blank" rel="noopener noreferrer">
-          <span><strong>Archivo final listo</strong><small>${esc(it.linkFinal)}</small></span>
-          <span class="deliverable__go">Abrir</span>
-        </a>` : ""}
-      ${design ? `
-      <form class="manage" id="editForm" novalidate>
-        <div class="manage__head"><span>Gestión de Diseño</span><span class="private">Privado · solo Diseño</span></div>
-        <div class="mods">
-          <div><strong>Modificaciones solicitadas</strong><small>Registrá cada ronda de cambios pedida sobre esta pieza. Al pasar a «Requiere modificación» se suma una sola.</small></div>
-          <span class="counter counter--lg" role="group" aria-label="Modificaciones solicitadas">
-            <button type="button" data-dmods="-1" aria-label="Restar una modificación">−</button>
-            <b id="dMods">${it.mods}</b>
-            <button type="button" data-dmods="1" aria-label="Sumar una modificación">+</button>
-          </span>
-        </div>
-        <div class="manage__grid">
-          <label>Asignado<select name="asignado">${assigneeOptions(it.assignee)}</select></label>
-          <label>Prioridad<select name="prioridad">${options(PRIORITIES, it.priority)}</select></label>
-          <label>Estado<select name="estado">${options(STATUS_KEYS, it.status)}</select></label>
-        </div>
-        <label>Área solicitante<select name="area">${areaOptions(it)}</select></label>
-        <label>Link al archivo final<input type="url" name="link_final" value="${esc(it.linkFinal || "")}" placeholder="https://drive.google.com/… · Canva · Figma" /></label>
-        <label>Observaciones (solo Diseño)<textarea name="observaciones" maxlength="4000" placeholder="Notas internas del equipo">${esc(it.notes || "")}</textarea></label>
-        <p class="auth__error" id="editError" role="alert" hidden></p>
-        <button class="primary" type="submit">Guardar cambios</button>
-      </form>` : `<p class="readonly-note">El estado, la prioridad y la mesa los define Diseño. Podés sumar comentarios abajo.</p>`}
-      <section class="detail-section">
-        <h4>Comentarios y movimientos</h4>
-        ${it.comments.length ? it.comments.map((c) => `
-          <div class="comment${c.system ? " comment--system" : ""}"><small>${avatar(c.who)}${esc(c.who)} · ${fmtStamp(c.at)}</small><span class="comment__text">${esc(c.text)}</span></div>`).join("") : `<p class="type">Todavía no hay comentarios.</p>`}
-        <form class="row" id="commentForm">
-          <label class="sr-only" for="commentInput">Nuevo comentario</label>
-          <input id="commentInput" autocomplete="off" placeholder="Escribí un comentario como ${esc(myName())}…" maxlength="1000" />
-          <button class="primary" type="submit">Comentar</button>
-        </form>
-      </section>
+
+      <div class="drawer__scroll">
+        ${wrapOpen}
+          <section class="dblock" id="reqBlock">
+            <div class="dblock__head">
+              <span class="dblock__eyebrow">Indicaciones y datos del pedido</span>
+              ${design ? `<button class="dbtn" type="button" data-toggle-req aria-expanded="${d.req}">${d.req ? "✓ Listo" : "✎ Editar datos"}</button>` : ""}
+            </div>
+            <p class="dblock__text" id="dDescView">${it.description ? esc(it.description) : "Sin indicaciones."}</p>
+            ${it.link ? `<a class="ref" id="dLinkView" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg>Ver insumos adjuntos</a>` : ""}
+            ${design ? `
+            <div class="req-edit" id="reqEdit"${d.req ? "" : " hidden"}>
+              <div class="req-edit__grid3">
+                <label>Marca / Ámbito<select name="marca">${brandOptions(it.brand)}</select></label>
+                <label>Tipo de pieza<select name="tipo">${pieceOptions(it.type)}</select></label>
+                <label>Área solicitante<select name="area">${areaOptions(it)}</select></label>
+              </div>
+              <div class="req-edit__grid2">
+                <label>Fecha de inicio<input type="date" name="fecha_inicio" value="${esc(it.start || "")}" /></label>
+                <label>Entrega ideal<input type="date" name="entrega" value="${esc(it.due || "")}" /></label>
+              </div>
+              <label>Indicaciones del pedido<textarea name="descripcion" rows="2" maxlength="4000">${esc(it.description || "")}</textarea></label>
+              <label>Link de insumos adjuntos<input type="url" name="link" value="${esc(it.link || "")}" placeholder="https://drive.google.com/…" /></label>
+            </div>` : ""}
+          </section>
+
+          ${design || it.subs.length ? `
+          <section class="dblock subs" id="subsBlock">
+            <div class="dblock__head">
+              <button class="subs__toggle" type="button" data-subs-toggle aria-expanded="${d.subs}">
+                <span class="subs__chev" aria-hidden="true">▶</span>
+                <span class="dblock__eyebrow">Subtareas / cambios</span>
+                <span class="subs__badge" id="subsBadge">${done} / ${it.subs.length} lista${it.subs.length === 1 ? "" : "s"}</span>
+              </button>
+              ${design ? `<button class="dbtn" type="button" data-sub-add-toggle>+ Agregar subtarea</button>` : ""}
+            </div>
+            <div class="subs__bar"><i id="subsBar" style="width:${it.subs.length ? Math.round((done / it.subs.length) * 100) : 0}%"></i></div>
+            <div class="subs__body" id="subsBody"${d.subs ? "" : " hidden"}>
+              ${design ? `
+              <div class="subs__add" id="subsAdd" hidden>
+                <input data-new="t" maxlength="200" placeholder="Nombre de la subtarea *" aria-label="Nombre de la subtarea" />
+                <input data-new="p" maxlength="20" placeholder="Pág. (opc.)" aria-label="Página (opcional)" title="Opcional: N° de página si es un manual" />
+                <input data-new="l" type="url" placeholder="Link (opc.)" aria-label="Link (opcional)" />
+                <button class="primary sm" type="button" data-sub-add>Sumar</button>
+              </div>` : ""}
+              <div class="subs__list" id="subsList">${subsListHTML(it)}</div>
+            </div>
+          </section>` : ""}
+
+          ${design ? `
+          <section class="final${it.linkFinal ? "" : " final--empty"}">
+            <div class="final__row">
+              <div class="final__info">
+                <div class="final__title"><strong>${it.linkFinal ? "Archivo final listo" : "Archivo final"}</strong><span class="final__badge">${it.linkFinal ? "Cargado" : "Pendiente"}</span></div>
+                <p class="final__url">${it.linkFinal ? esc(it.linkFinal) : "Sin archivo final cargado todavía."}</p>
+              </div>
+              <div class="final__acts">
+                <button class="dbtn" type="button" data-final-edit>${it.linkFinal ? "✎ Editar link" : "+ Cargar link"}</button>
+                ${it.linkFinal ? `
+                  <button class="dbtn" type="button" data-final-copy aria-label="Copiar link">📋</button>
+                  <a class="primary sm" href="${esc(it.linkFinal)}" target="_blank" rel="noopener noreferrer">Abrir</a>` : ""}
+              </div>
+            </div>
+            <div class="final__edit" id="finalEdit" hidden>
+              <label class="sr-only" for="dLinkFinal">Link al archivo final</label>
+              <input id="dLinkFinal" type="url" name="link_final" value="${esc(it.linkFinal || "")}" placeholder="Pegá el link de Drive, Canva o Figma…" />
+              <button class="primary sm" type="button" data-final-apply>Aplicar</button>
+              ${it.linkFinal ? `<button class="danger-soft sm" type="button" data-final-clear>Quitar</button>` : ""}
+            </div>
+          </section>
+
+          <section class="manage">
+            <div class="manage__head"><span>Gestión de Diseño</span><span class="private">Privado · solo Diseño</span></div>
+            <div class="mods">
+              <div><strong>Modificaciones solicitadas</strong><small>Registrá cada ronda de cambios pedida sobre esta pieza. Al pasar a «Requiere modificación» se suma una sola.</small></div>
+              <span class="counter counter--lg" role="group" aria-label="Modificaciones solicitadas">
+                <button type="button" data-dmods="-1" aria-label="Restar una modificación">−</button>
+                <b id="dMods">${it.mods}</b>
+                <button type="button" data-dmods="1" aria-label="Sumar una modificación">+</button>
+              </span>
+            </div>
+            <div class="manage__grid">
+              <label>Asignado<select name="asignado">${assigneeOptions(it.assignee)}</select></label>
+              <label>Prioridad<select name="prioridad">${options(PRIORITIES, it.priority)}</select></label>
+              <label>Estado<select name="estado">${options(STATUS_KEYS, it.status)}</select></label>
+            </div>
+            <label>Observaciones (solo Diseño)<textarea name="observaciones" maxlength="4000" placeholder="Notas internas del equipo…">${esc(it.notes || "")}</textarea></label>
+            <p class="auth__error" id="editError" role="alert" hidden></p>
+          </section>` : `
+          ${it.linkFinal ? `
+            <a class="deliverable" href="${esc(it.linkFinal)}" target="_blank" rel="noopener noreferrer">
+              <span><strong>Archivo final listo</strong><small>${esc(it.linkFinal)}</small></span>
+              <span class="deliverable__go">Abrir</span>
+            </a>` : ""}
+          <p class="readonly-note">El estado, la prioridad y la mesa los define Diseño. Podés sumar comentarios abajo.</p>`}
+        ${wrapClose}
+
+        <section class="detail-section activity">
+          <div class="dblock__head">
+            <span class="dblock__eyebrow">Comentarios y movimientos</span>
+            ${older > 0 ? `<button class="linkish" type="button" data-older aria-expanded="${d.older}">${d.older ? "Ocultar historial anterior ▴" : `Ver ${plural(older, "movimiento anterior", "movimientos anteriores")} ▾`}</button>` : ""}
+          </div>
+          ${comments.length ? `
+            <div class="activity__list">
+              ${comments.slice(0, OLDER_SHOWN).map(commentHTML).join("")}
+              ${older > 0 ? `<div class="activity__older"${d.older ? "" : " hidden"}>${comments.slice(OLDER_SHOWN).map(commentHTML).join("")}</div>` : ""}
+            </div>` : `<p class="type">Todavía no hay comentarios.</p>`}
+          <form class="row" id="commentForm">
+            <label class="sr-only" for="commentInput">Nuevo comentario</label>
+            <input id="commentInput" autocomplete="off" placeholder="Escribí un comentario como ${esc(myName())}…" maxlength="1000" />
+            <button class="primary" type="submit">Comentar</button>
+          </form>
+        </section>
+      </div>
+
       <div class="drawer__foot">
         ${canDelete(it) ? `<button class="danger-soft" type="button" data-delete><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg>Eliminar tarjeta</button>` : `<span></span>`}
-        <button class="secondary" type="button" data-close>Cerrar</button>
+        <div class="drawer__foot-right">
+          <button class="secondary" type="button" data-close>Cerrar</button>
+          ${design && it.status !== DONE ? `<button class="finish" type="button" data-finish>Finalizar 😉</button>` : ""}
+          ${design ? `<button class="primary" type="submit" form="editForm">Guardar cambios</button>` : ""}
+        </div>
       </div>`;
   };
 
   const openDetail = (id) => {
+    if (state.openId !== Number(id)) state.detailUI = { req: false, subs: true, older: false };
     state.openId = Number(id);
     renderDetail();
     if (!detailDialog.open) detailDialog.showModal();
-    detailDialog.scrollTop = 0;
+    $(".drawer__scroll", detailDialog)?.scrollTo(0, 0);
   };
 
   detailDialog.addEventListener("close", () => {
@@ -1437,8 +1618,38 @@
     state.detailDirty = false;
   });
 
+  // Los datos del pedido se reflejan arriba mientras se editan
+  const syncDetailMeta = (f) => {
+    if (!f) return;
+    $("#dMetaBrand").textContent = f.marca.value;
+    $("#dMetaPiece").textContent = f.tipo.value;
+    $("#dMetaDue").textContent = fmtFullDate(f.entrega.value);
+    const opt = f.area.selectedOptions[0];
+    if (opt) $("#dAreaChip").textContent = opt.textContent.replace(/ · elegí un área$/, "");
+  };
+
   detailDialog.addEventListener("input", (e) => {
-    if (e.target.closest("#editForm")) state.detailDirty = true;
+    if (e.target.form?.id === "editForm") state.detailDirty = true;
+    if (["marca", "tipo", "entrega", "area"].includes(e.target.name)) syncDetailMeta(e.target.form);
+  });
+  detailDialog.addEventListener("change", (e) => {
+    if (["marca", "tipo", "entrega", "area"].includes(e.target.name)) syncDetailMeta(e.target.form);
+    const ok = e.target.closest("[data-sub-ok]");
+    if (ok) {
+      const it = find(state.openId);
+      const n = Number(ok.closest("[data-sub]").dataset.sub);
+      if (!it || !it.subs[n]) return;
+      const next = it.subs.map((s, i) => (i === n ? { ...s, ok: ok.checked } : s));
+      saveSubs(it, next, ok.checked && subsDone(next) === next.length ? "✨ Todas las subtareas listas" : null);
+    }
+  });
+
+  // Enter en los campos de una subtarea nueva la suma (no guarda el formulario)
+  detailDialog.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.closest("#subsAdd")) {
+      e.preventDefault();
+      $("[data-sub-add]", detailDialog)?.click();
+    }
   });
 
   detailDialog.addEventListener("submit", async (e) => {
@@ -1449,13 +1660,26 @@
     if (e.target.id === "editForm") {
       const f = e.target.elements;
       const errBox = $("#editError");
-      const link = f.link_final.value.trim();
-      if (link && !/^https?:\/\//i.test(link)) {
-        errBox.textContent = "El link al archivo final tiene que empezar con http:// o https://.";
+      const fail = (msg) => {
+        errBox.textContent = msg;
         errBox.hidden = false;
-        return;
-      }
+        errBox.scrollIntoView({ block: "nearest" });
+      };
+      const link = f.link_final.value.trim();
+      if (link && !/^https?:\/\//i.test(link)) return fail("El link al archivo final tiene que empezar con http:// o https://.");
+      const insumos = f.link.value.trim();
+      if (insumos && !/^https?:\/\//i.test(insumos)) return fail("El link de insumos tiene que empezar con http:// o https://.");
+      const title = f.titulo.value.trim();
+      if (!title) return fail("El pedido necesita un título.");
       const cambios = {};
+      if (title !== it.title) cambios.titulo = title;
+      if (f.marca.value !== it.brand) cambios.marca = f.marca.value;
+      if (f.tipo.value !== it.type) cambios.tipo = f.tipo.value;
+      if (f.fecha_inicio.value !== (it.start || "")) cambios.fecha_inicio = f.fecha_inicio.value;
+      if (f.entrega.value !== (it.due || "")) cambios.entrega = f.entrega.value;
+      const desc = f.descripcion.value.trim();
+      if (desc !== (it.description || "")) cambios.descripcion = desc;
+      if (insumos !== (it.link || "")) cambios.link = insumos;
       if (f.estado.value !== it.status) cambios.estado = f.estado.value;
       if (f.prioridad.value !== it.priority) cambios.prioridad = f.prioridad.value;
       if ((f.asignado.value || null) !== it.assignee) cambios.asignado = f.asignado.value;
@@ -1469,17 +1693,18 @@
         state.detailDirty = false;
         return toast("No hay cambios para guardar.");
       }
-      const btn = e.target.querySelector("button[type=submit]");
-      btn.disabled = true;
+      const btns = $$('[form="editForm"], [data-finish], [data-final-apply]', detailDialog);
+      btns.forEach((b) => { b.disabled = true; });
       try {
         if (Object.keys(cambios).length) await rpc("mesa_pedido_editar", { p_id: it.id, p_cambios: cambios });
         if (areaChanged) await rpc("mesa_pedido_area", { p_id: it.id, p_area_id: Number(areaVal) });
         notify();
         state.detailDirty = false;
-        toast(`${it.code} guardado${state.dMods ? ` · ${plural(state.dMods, "modificación", "modificaciones")}` : ""}.`);
+        state.detailUI.req = false;
+        toast(cambios.estado === DONE ? `🎉 ${it.code} finalizado 😉` : `${it.code} guardado${state.dMods ? ` · ${plural(state.dMods, "modificación", "modificaciones")}` : ""}.`);
         await fetchData();
       } catch (err) {
-        btn.disabled = false;
+        btns.forEach((b) => { b.disabled = false; });
         handleError("guardar los cambios", err);
       }
       return;
@@ -1513,11 +1738,94 @@
     if (e.target === detailDialog || e.target.closest("[data-close]")) return detailDialog.close();
     const it = find(state.openId);
     if (!it) return;
+    const form = $("#editForm");
     const m = e.target.closest("[data-dmods]");
     if (m) {
       state.dMods = Math.max(0, state.dMods + Number(m.dataset.dmods));
       $("#dMods").textContent = state.dMods;
       state.detailDirty = true;
+      return;
+    }
+    const reqBtn = e.target.closest("[data-toggle-req]");
+    if (reqBtn) {
+      state.detailUI.req = !state.detailUI.req;
+      $("#reqEdit").hidden = !state.detailUI.req;
+      reqBtn.textContent = state.detailUI.req ? "✓ Listo" : "✎ Editar datos";
+      reqBtn.setAttribute("aria-expanded", String(state.detailUI.req));
+      if (state.detailUI.req) form.elements.marca.focus();
+      return;
+    }
+    const subsToggle = e.target.closest("[data-subs-toggle]");
+    if (subsToggle) {
+      state.detailUI.subs = !state.detailUI.subs;
+      $("#subsBody").hidden = !state.detailUI.subs;
+      subsToggle.setAttribute("aria-expanded", String(state.detailUI.subs));
+      return;
+    }
+    if (e.target.closest("[data-sub-add-toggle]")) {
+      state.detailUI.subs = true;
+      $("#subsBody").hidden = false;
+      $("[data-subs-toggle]").setAttribute("aria-expanded", "true");
+      const box = $("#subsAdd");
+      box.hidden = !box.hidden;
+      if (!box.hidden) $('[data-new="t"]', box).focus();
+      return;
+    }
+    if (e.target.closest("[data-sub-add]")) {
+      const box = $("#subsAdd");
+      const get = (k) => $(`[data-new="${k}"]`, box);
+      const t = get("t").value.trim();
+      const l = get("l").value.trim();
+      if (!t) {
+        get("t").focus();
+        return toast("⚠️ Escribí el nombre de la subtarea");
+      }
+      if (l && !/^https?:\/\//i.test(l)) {
+        get("l").focus();
+        return toast("El link tiene que empezar con http:// o https://.");
+      }
+      const p = get("p").value.trim();
+      ["t", "p", "l"].forEach((k) => { get(k).value = ""; });
+      box.hidden = true;
+      return saveSubs(it, [...it.subs, { t, p, l, ok: false }], p ? `+ Subtarea agregada (${pageLabel(p)})` : "+ Subtarea agregada");
+    }
+    const subDel = e.target.closest("[data-sub-del]");
+    if (subDel) {
+      const n = Number(subDel.closest("[data-sub]").dataset.sub);
+      const gone = it.subs[n];
+      const next = it.subs.filter((_, i) => i !== n);
+      return saveSubs(it, next, gone ? `Subtarea «${gone.t}» quitada` : null);
+    }
+    if (e.target.closest("[data-final-edit]")) {
+      const box = $("#finalEdit");
+      box.hidden = !box.hidden;
+      if (!box.hidden) $("#dLinkFinal").focus();
+      return;
+    }
+    if (e.target.closest("[data-final-apply]")) return form.requestSubmit();
+    if (e.target.closest("[data-final-clear]")) {
+      $("#dLinkFinal").value = "";
+      state.detailDirty = true;
+      return form.requestSubmit();
+    }
+    if (e.target.closest("[data-final-copy]")) {
+      navigator.clipboard?.writeText(it.linkFinal || "").then(
+        () => toast("📋 Link copiado al portapapeles"),
+        () => toast("No se pudo copiar el link."));
+      return;
+    }
+    if (e.target.closest("[data-finish]")) {
+      form.elements.estado.value = DONE;
+      state.detailDirty = true;
+      return form.requestSubmit();
+    }
+    const olderBtn = e.target.closest("[data-older]");
+    if (olderBtn) {
+      state.detailUI.older = !state.detailUI.older;
+      $(".activity__older", detailDialog).hidden = !state.detailUI.older;
+      const n = it.comments.length - OLDER_SHOWN;
+      olderBtn.textContent = state.detailUI.older ? "Ocultar historial anterior ▴" : `Ver ${plural(n, "movimiento anterior", "movimientos anteriores")} ▾`;
+      olderBtn.setAttribute("aria-expanded", String(state.detailUI.older));
       return;
     }
     const del = e.target.closest("[data-delete]");
@@ -1530,6 +1838,61 @@
   const newForm = $("#newForm");
   const newError = $("#newError");
 
+  // Tiempo habitual de cada tipo de pieza (días hábiles)
+  const SLA_HINTS = {
+    "Pieza gráfica": "2–3 días hábiles",
+    "Manual": "4–6 días hábiles",
+    "Capacitación": "3–5 días hábiles",
+    "Presentación": "3–4 días hábiles",
+    "Organigrama": "2–3 días hábiles",
+    "Señalética": "2–4 días hábiles",
+    "Logo / identidad": "5–7 días hábiles",
+    "Otro": "3–4 días hábiles",
+  };
+  const OTHER_BRAND = "Otro";
+
+  const nfBrand = () => {
+    const nf = state.nf;
+    if (nf.dest === "corporate") return CORPORATE;
+    if (nf.dest === "fabricas") return FACTORIES;
+    return nf.brand === OTHER_BRAND ? newForm.elements.customBrand.value.trim() : nf.brand;
+  };
+
+  const renderNewSubs = () => {
+    const nf = state.nf;
+    const list = $("#nsubsList");
+    const n = nf.subs.length;
+    $("#nsubsBadge").hidden = !n;
+    $("#nsubsBadge").textContent = `${n} ítem${n === 1 ? "" : "s"}`;
+    const toggle = $("[data-nsubs-toggle]", newForm);
+    toggle.setAttribute("aria-expanded", String(nf.subsOpen));
+    list.hidden = !nf.subsOpen || !n;
+    list.innerHTML = nf.subs.map((s, i) => `
+      <div class="nsub" data-nsub="${i}">
+        <input data-k="t" value="${esc(s.t)}" maxlength="200" placeholder="Nombre subtarea *" aria-label="Nombre de la subtarea ${i + 1}" />
+        <input data-k="p" value="${esc(s.p)}" maxlength="20" placeholder="Pág. (opc.)" aria-label="Página (opcional)" />
+        <input data-k="l" type="url" value="${esc(s.l)}" placeholder="Link (opc.)" aria-label="Link (opcional)" />
+        <button type="button" data-nsub-del aria-label="Quitar subtarea ${i + 1}">✕</button>
+      </div>`).join("");
+  };
+
+  const syncNewSummary = () => {
+    const nf = state.nf;
+    const due = newForm.elements.due.value;
+    const hint = $("#slaHint");
+    if (due) {
+      const days = Math.max(1, Math.round((new Date(`${due}T12:00:00`) - new Date(`${state.today || today()}T12:00:00`)) / 86400000));
+      hint.innerHTML = `📅 Plazo seleccionado: <strong>${plural(days, "día", "días")}</strong> · Tiempo habitual para ${esc(nf.piece)}: <strong>${SLA_HINTS[nf.piece] || SLA_HINTS.Otro}</strong>.`;
+      hint.hidden = false;
+    } else {
+      hint.hidden = true;
+    }
+    if (isDesigner()) return;
+    const n = nf.subs.filter((s) => s.t.trim()).length;
+    const brand = nf.dest === "corporate" ? "Gastro" : nfBrand() || "Otra marca";
+    $("#newSubmit").textContent = `Enviar solicitud · ${brand}${n ? ` (${plural(n, "subtarea", "subtareas")})` : ""}`;
+  };
+
   const renderNewChips = () => {
     const nf = state.nf;
     $("#pieceChips").innerHTML = PIECES.map(([p]) =>
@@ -1537,10 +1900,14 @@
     $("#customPieceField").hidden = nf.piece !== "Otro";
     $$("#destScopes [data-dest]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.dest === nf.dest)));
     $("#brandChips").hidden = nf.dest !== "brand";
-    $("#brandChips").innerHTML = BRANDS.map((b) =>
+    $("#brandChips").innerHTML = [...BRANDS, OTHER_BRAND].map((b) =>
       `<button type="button" role="radio" aria-checked="${nf.brand === b}" data-brand="${esc(b)}">${esc(b)}</button>`).join("");
+    $("#customBrandField").hidden = !(nf.dest === "brand" && nf.brand === OTHER_BRAND);
+    $$("[data-nsubs-paste]", newForm).forEach((b) => { if (!b.closest("#nsubsPaste")) b.hidden = nf.piece !== "Manual"; });
     const due = newForm.elements.due.value;
     $$("#dueChips [data-due]").forEach((b) => b.setAttribute("aria-pressed", String(dueFor(b.dataset.due) === due)));
+    renderNewSubs();
+    syncNewSummary();
   };
 
   // Atajos de fecha: en 48 hs, viernes de esta semana, viernes de la próxima
@@ -1559,42 +1926,135 @@
     $("#newSubmit").disabled = needsOk && !newForm.elements.approved.checked;
   };
 
+  // Borrador automático: queda guardado en este navegador hasta enviar o limpiar
+  const draftKey = () => `mesa-borrador:${state.me?.tipo}:${normKey(myName())}`;
+  const DRAFT_FIELDS = ["title", "customPiece", "customBrand", "description", "link", "due"];
+  const saveDraft = () => {
+    try {
+      const f = newForm.elements;
+      const nf = state.nf;
+      const data = { piece: nf.piece, dest: nf.dest, brand: nf.brand, subs: nf.subs };
+      DRAFT_FIELDS.forEach((k) => { data[k] = f[k].value; });
+      localStorage.setItem(draftKey(), JSON.stringify(data));
+    } catch (e) { /* sin almacenamiento: no hay borrador */ }
+  };
+  const loadDraft = () => {
+    try {
+      const data = JSON.parse(localStorage.getItem(draftKey()) || "null");
+      if (!data) return false;
+      const f = newForm.elements;
+      DRAFT_FIELDS.forEach((k) => { if (typeof data[k] === "string" && data[k]) f[k].value = data[k]; });
+      if (PIECES.some(([p]) => p === data.piece)) state.nf.piece = data.piece;
+      if (["corporate", "fabricas", "brand"].includes(data.dest)) state.nf.dest = data.dest;
+      if (typeof data.brand === "string") state.nf.brand = data.brand;
+      if (Array.isArray(data.subs)) {
+        state.nf.subs = data.subs.filter((s) => s && typeof s.t === "string").slice(0, 60)
+          .map((s) => ({ t: s.t, p: String(s.p || ""), l: String(s.l || "") }));
+        state.nf.subsOpen = state.nf.subs.length > 0;
+      }
+      return Boolean(f.title.value || f.description.value || state.nf.subs.length);
+    } catch (e) {
+      return false;
+    }
+  };
+  const clearDraft = () => {
+    try { localStorage.removeItem(draftKey()); } catch (e) { /* nada */ }
+  };
+
   const openNew = () => {
     newForm.reset();
     newError.hidden = true;
     const design = isDesigner();
     const fromFactory = !design && normKey(state.me.area).includes("fabrica");
-    state.nf = { piece: "Pieza gráfica", dest: fromFactory ? "fabricas" : "corporate", brand: BRANDS[0] };
+    state.nf = { piece: "Pieza gráfica", dest: fromFactory ? "fabricas" : "corporate", brand: BRANDS[0], subs: [], subsOpen: false };
     newForm.elements.due.value = addDays(state.today || today(), 7);
     $("#newEyebrow").textContent = design ? "Alta directa · Diseño" : `Nueva solicitud · ${state.me.area}`;
     $("#newTitle").textContent = design ? "Nuevo proyecto" : "¿Qué necesitás que diseñemos?";
     $("#newAreaBadge").textContent = design ? "Mesa de Diseño" : state.me.area;
     $("#designExtras").hidden = !design;
     $("#approvalBox").hidden = design;
+    $("#nsubsPaste").hidden = true;
     $("#newSubmit").textContent = design ? "Crear proyecto" : "Enviar solicitud";
     if (design) {
       newForm.elements.area.innerHTML = areaOptions(null);
       newForm.elements.assignee.innerHTML = assigneeOptions(myAlias());
       newForm.elements.priority.innerHTML = options(PRIORITIES, "Media");
     }
+    const restored = loadDraft();
     renderNewChips();
     syncSubmit();
     newDialog.showModal();
     newForm.elements.title.focus();
+    if (restored) toast("Recuperamos tu borrador. Podés seguir donde quedaste.");
   };
 
   newForm.addEventListener("click", (e) => {
+    const nf = state.nf;
+    if (e.target.closest("[data-clear-draft]")) {
+      clearDraft();
+      const due = newForm.elements.due.value;
+      DRAFT_FIELDS.forEach((k) => { newForm.elements[k].value = ""; });
+      newForm.elements.due.value = due;
+      nf.subs = [];
+      nf.subsOpen = false;
+      renderNewChips();
+      return toast("🧹 Borrador limpiado");
+    }
+    if (e.target.closest("[data-nsubs-toggle]")) {
+      nf.subsOpen = !nf.subsOpen;
+      return renderNewSubs();
+    }
+    if (e.target.closest("[data-nsubs-add]")) {
+      nf.subs.push({ t: "", p: "", l: "" });
+      nf.subsOpen = true;
+      renderNewChips();
+      saveDraft();
+      return $(`[data-nsub="${nf.subs.length - 1}"] [data-k="t"]`, newForm)?.focus();
+    }
+    if (e.target.closest("[data-nsubs-paste]")) {
+      const box = $("#nsubsPaste");
+      box.hidden = !box.hidden;
+      if (!box.hidden) $("#nsubsPasteText").focus();
+      return;
+    }
+    if (e.target.closest("[data-nsubs-convert]")) {
+      const lines = parseSubLines($("#nsubsPasteText").value);
+      if (!lines.length) return;
+      nf.subs.push(...lines.map(({ t, p }) => ({ t, p, l: "" })));
+      nf.subs = nf.subs.slice(0, 60);
+      nf.subsOpen = true;
+      $("#nsubsPasteText").value = "";
+      $("#nsubsPaste").hidden = true;
+      renderNewChips();
+      saveDraft();
+      return toast(`✨ ${plural(lines.length, "subtarea agregada", "subtareas agregadas")} desde tu lista`);
+    }
+    const del = e.target.closest("[data-nsub-del]");
+    if (del) {
+      nf.subs.splice(Number(del.closest("[data-nsub]").dataset.nsub), 1);
+      renderNewChips();
+      return saveDraft();
+    }
     const piece = e.target.closest("[data-piece]");
     const dest = e.target.closest("[data-dest]");
     const brand = e.target.closest("[data-brand]");
     const due = e.target.closest("[data-due]");
-    if (piece) state.nf.piece = piece.dataset.piece;
-    else if (dest) state.nf.dest = dest.dataset.dest;
-    else if (brand) state.nf.brand = brand.dataset.brand;
+    if (piece) nf.piece = piece.dataset.piece;
+    else if (dest) nf.dest = dest.dataset.dest;
+    else if (brand) nf.brand = brand.dataset.brand;
     else if (due) newForm.elements.due.value = dueFor(due.dataset.due);
     else return;
     renderNewChips();
-    if (piece && state.nf.piece === "Otro") newForm.elements.customPiece.focus();
+    saveDraft();
+    if (piece && nf.piece === "Otro") newForm.elements.customPiece.focus();
+    if (brand && nf.brand === OTHER_BRAND) newForm.elements.customBrand.focus();
+  });
+
+  newForm.addEventListener("input", (e) => {
+    const row = e.target.closest("[data-nsub]");
+    if (row) state.nf.subs[Number(row.dataset.nsub)][e.target.dataset.k] = e.target.value;
+    if (e.target.id !== "nsubsPasteText") saveDraft();
+    if (row || e.target.name === "customBrand") syncNewSummary();
   });
 
   newForm.addEventListener("change", (e) => {
@@ -1616,20 +2076,25 @@
     const custom = f.customPiece.value.trim();
     const description = f.description.value.trim();
     const link = f.link.value.trim();
+    const subs = state.nf.subs.map((s) => ({ t: s.t.trim(), p: s.p.trim(), l: s.l.trim(), ok: false })).filter((s) => s.t);
+    const badSub = subs.find((s) => s.l && !/^https?:\/\//i.test(s.l));
     if (!title) return showNewError("Poné un título para el pedido.", f.title);
     if (state.nf.piece === "Otro" && !custom) return showNewError("Contanos qué pieza necesitás.", f.customPiece);
+    if (state.nf.dest === "brand" && !nfBrand()) return showNewError("Escribí el nombre de la marca.", f.customBrand);
     if (!f.due.value) return showNewError("Elegí una fecha ideal de entrega.", f.due);
     if (!design && !description) return showNewError("Escribí las indicaciones: textos, medidas o referencias.", f.description);
     if (link && !/^https?:\/\//i.test(link)) return showNewError("El link tiene que empezar con http:// o https://.", f.link);
+    if (badSub) return showNewError(`El link de la subtarea «${badSub.t}» tiene que empezar con http:// o https://.`);
     if (!design && !f.approved.checked) return showNewError("Confirmá que el contenido ya está aprobado por tu área.");
 
     const pedido = {
       titulo: title,
       tipo: state.nf.piece === "Otro" ? `Otro: ${custom}` : state.nf.piece,
-      marca: state.nf.dest === "corporate" ? CORPORATE : state.nf.dest === "fabricas" ? FACTORIES : state.nf.brand,
+      marca: nfBrand(),
       entrega: f.due.value,
       descripcion: description,
       link,
+      subtareas: subs,
     };
     if (design) {
       pedido.area_id = Number(f.area.value) || null;
@@ -1641,8 +2106,9 @@
     try {
       const res = await rpc("mesa_pedido_crear", { p_pedido: pedido });
       notify();
+      clearDraft();
       newDialog.close();
-      toast(design ? `${code(res.codigo)} creado en «No iniciado».` : `${code(res.codigo)} enviado a Diseño.`);
+      toast(design ? `${code(res.codigo)} creado en «No iniciado».` : `✅ ${code(res.codigo)} enviado a Diseño.`);
       await fetchData();
     } catch (err) {
       handleError("crear el pedido", err);
@@ -2001,16 +2467,22 @@
     if (del) armDelete(del, it, "¿Eliminar?");
   });
 
-  // Arrastrar y soltar entre columnas (solo Diseño)
+  // Arrastrar y soltar (solo Diseño): entre columnas cambia el estado; sobre otra tarjeta, además, la ubica arriba o abajo
+  let dragId = null;
+  const clearInsert = () => $$(".card.drop-top, .card.drop-bottom", board).forEach((c) => c.classList.remove("drop-top", "drop-bottom"));
+
   board.addEventListener("dragstart", (e) => {
     const card = e.target.closest(".card");
     if (!card || !isDesigner()) return;
+    dragId = Number(card.dataset.id);
     e.dataTransfer.setData("text/plain", card.dataset.id);
     e.dataTransfer.effectAllowed = "move";
     card.classList.add("dragging");
   });
   board.addEventListener("dragend", (e) => {
+    dragId = null;
     e.target.closest?.(".card")?.classList.remove("dragging");
+    clearInsert();
     $$(".column.drop", board).forEach((c) => c.classList.remove("drop"));
   });
   board.addEventListener("dragover", (e) => {
@@ -2019,15 +2491,57 @@
     e.preventDefault();
     $$(".column.drop", board).forEach((c) => c !== col && c.classList.remove("drop"));
     col.classList.add("drop");
+    const over = e.target.closest(".card");
+    clearInsert();
+    if (over && Number(over.dataset.id) !== dragId) {
+      const r = over.getBoundingClientRect();
+      over.classList.add(e.clientY - r.top < r.height / 2 ? "drop-top" : "drop-bottom");
+    }
+  });
+  board.addEventListener("dragleave", (e) => {
+    if (!board.contains(e.relatedTarget)) clearInsert();
   });
   board.addEventListener("drop", (e) => {
     const col = e.target.closest(".column");
     if (!col || !isDesigner()) return;
     e.preventDefault();
     col.classList.remove("drop");
+    const over = e.target.closest(".card");
     const it = find(e.dataTransfer.getData("text/plain"));
-    if (it && it.status !== col.dataset.status) quickEdit(it.id, { estado: col.dataset.status });
+    const place = over && it && Number(over.dataset.id) !== it.id
+      ? { id: Number(over.dataset.id), before: over.classList.contains("drop-top") }
+      : null;
+    clearInsert();
+    if (!it) return;
+    if (place) return moveCard(it, col.dataset.status, place);
+    if (it.status !== col.dataset.status) quickEdit(it.id, { estado: col.dataset.status });
   });
+
+  // Ubica la tarjeta junto a otra y guarda el orden de toda la columna (y el estado, si cambió de columna)
+  const moveCard = async (it, status, place) => {
+    const column = sortColumn(state.items.filter((i) => i.status === status && i.id !== it.id), status);
+    const at = column.findIndex((i) => i.id === place.id);
+    column.splice(at < 0 ? 0 : place.before ? at : at + 1, 0, it);
+    const ids = column.map((i) => i.id);
+    const prevOrder = new Map(column.map((i) => [i.id, i.orden]));
+    const statusChange = it.status !== status ? { estado: status } : null;
+    const prev = statusChange ? undoFor(it, statusChange) : null;
+    if (statusChange) applyLocal(it, statusChange);
+    column.forEach((i, n) => { i.orden = n + 1; });
+    render();
+    try {
+      if (statusChange) await rpc("mesa_pedido_editar", { p_id: it.id, p_cambios: statusChange });
+      await rpc("mesa_pedido_ordenar", { p_estado: status, p_ids: ids });
+      notify();
+      toast(statusChange ? editMsg(it, statusChange) : `↕️ Orden actualizado (${it.code})`,
+        prev ? { label: "Deshacer", run: () => quickEdit(it.id, prev, { undo: false }) } : null);
+      scheduleRefresh();
+    } catch (err) {
+      column.forEach((i) => { i.orden = prevOrder.get(i.id) ?? null; });
+      handleError("mover la tarjeta", err);
+      refresh();
+    }
+  };
 
   // Tooltip de los gráficos (mouse y teclado)
   const tip = $("#vizTip");
@@ -2071,6 +2585,7 @@
   if (!sb) {
     lock();
     showAuthError("No se pudo cargar la conexión con la base de datos. Revisá tu conexión y recargá la página.");
+    window.dispatchEvent(new Event("mesa:ready"));
     return;
   }
 
