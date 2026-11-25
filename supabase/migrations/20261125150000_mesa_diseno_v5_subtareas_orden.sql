@@ -357,7 +357,7 @@ as $$
 declare
   s public.mesa_sesiones := public.mesa_sesion(p_token, true);
 begin
-  if coalesce(array_length(p_ids, 1), 0) > 500 then
+  if coalesce(array_length(p_ids, 1), 0) > 5000 then
     raise exception 'Demasiadas tarjetas para ordenar.';
   end if;
   update public.mesa_pedidos p
