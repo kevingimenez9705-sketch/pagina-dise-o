@@ -43,6 +43,87 @@
     <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V8M6 13l6-6 6 6M4 3h16"/></symbol>
   </svg>
 
+  <!-- Pantalla de carga: el isotipo se llena mientras conecta con la base -->
+  <div class="loader" id="loader" role="status" aria-live="polite" aria-label="Cargando Mesa de Diseño">
+    <div class="loader__grid" aria-hidden="true"></div>
+    <div class="loader__halo" aria-hidden="true"></div>
+    <div class="loader__inner">
+      <div class="loader__logo" aria-hidden="true">
+        <svg viewBox="-160 -160 1811 1812">
+          <defs><clipPath id="ldClip"><path id="ldClipPath" /></clipPath></defs>
+          <circle class="loader__orbit" cx="745" cy="746" r="880" />
+          <path class="loader__base" id="ldBase" />
+          <g clip-path="url(#ldClip)">
+            <g id="ldLevel" transform="translate(0 1560)">
+              <path class="loader__wave" d="M-200 0 Q -20 -50 160 0 T 520 0 T 880 0 T 1240 0 T 1600 0 T 1960 0 T 2320 0 V 1800 H -200 Z" />
+              <path class="loader__wave loader__edge" d="M-200 0 Q -20 -50 160 0 T 520 0 T 880 0 T 1240 0 T 1600 0 T 1960 0 T 2320 0" />
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="loader__eyebrow"><span aria-hidden="true"></span>Capacitación + Diseño</div>
+      <div class="loader__title">MESA DE DISEÑO</div>
+      <div class="loader__pill">
+        <div class="loader__row"><span id="ldText">Conectando con Mesa de Diseño…</span><b id="ldPct">0%</b></div>
+        <div class="loader__bar"><i id="ldBar"></i></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var el = document.getElementById("loader");
+      var src = document.querySelector("#logo-dg path");
+      if (src) {
+        document.getElementById("ldBase").setAttribute("d", src.getAttribute("d"));
+        document.getElementById("ldClipPath").setAttribute("d", src.getAttribute("d"));
+      }
+      var level = document.getElementById("ldLevel");
+      var pctEl = document.getElementById("ldPct");
+      var bar = document.getElementById("ldBar");
+      var text = document.getElementById("ldText");
+      var steps = [[28, "Conectando con Mesa de Diseño…"], [62, "Sincronizando proyectos y prioridades…"], [99, "Preparando el tablero…"], [100, "¡Listo!"]];
+      var t0 = performance.now();
+      var ready = false;
+      var readyAt = 0;
+      var from = 0;
+      var shown = 0;
+      var finish = function () {
+        if (ready) return;
+        ready = true;
+        readyAt = performance.now();
+        from = shown;
+      };
+      window.addEventListener("mesa:ready", finish);
+      setTimeout(finish, 12000);
+      var tick = function (now) {
+        var p;
+        if (!ready) {
+          // Avanza rápido al principio y se frena antes del 90 % hasta que la app avisa que está lista
+          p = 90 * (1 - Math.exp(-(now - t0) / 900));
+        } else {
+          var k = Math.min(1, (now - readyAt) / 450);
+          p = from + (100 - from) * (1 - Math.pow(1 - k, 2));
+        }
+        shown = p;
+        var n = Math.round(p);
+        pctEl.textContent = n + "%";
+        bar.style.width = n + "%";
+        level.setAttribute("transform", "translate(0 " + (1560 - p * 15.9).toFixed(1) + ")");
+        for (var i = 0; i < steps.length; i++) { if (n <= steps[i][0]) { text.textContent = steps[i][1]; break; } }
+        if (ready && n >= 100 && now - t0 > 900) {
+          setTimeout(function () {
+            el.classList.add("is-done");
+            setTimeout(function () { el.remove(); }, 650);
+          }, 220);
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    })();
+  </script>
+
+
   <aside class="side">
     <div class="side__top">
       <a class="side__brand" href="index.html" aria-label="Mesa de Diseño · inicio">
@@ -246,6 +327,25 @@
         <label id="customPieceField" hidden>¿Qué pieza necesitás?
           <input name="customPiece" maxlength="50" placeholder="Especificá qué pieza necesitás…" />
         </label>
+        <div class="nsubs">
+          <div class="nsubs__head">
+            <button class="subs__toggle" type="button" data-nsubs-toggle aria-expanded="false">
+              <span class="subs__chev" aria-hidden="true">▶</span>
+              <span class="nsubs__label">Subtareas o cambios incluidos (opcional)</span>
+              <span class="subs__badge" id="nsubsBadge" hidden>0 ítems</span>
+            </button>
+            <div class="nsubs__acts">
+              <button class="dbtn dbtn--sand" type="button" data-nsubs-paste hidden>📋 Pegar lista rápida</button>
+              <button class="primary sm" type="button" data-nsubs-add>+ Agregar subtarea</button>
+            </div>
+          </div>
+          <div class="nsubs__paste" id="nsubsPaste" hidden>
+            <div class="nsubs__paste-head"><span>Pegá varios cambios juntos (uno por renglón):</span><button type="button" data-nsubs-paste aria-label="Cerrar">✕</button></div>
+            <textarea id="nsubsPasteText" rows="3" placeholder="Ej.:&#10;Pág 14 - Actualizar temperatura de horneado&#10;Pág 22 - Reemplazar foto de armado&#10;Revisar portada final"></textarea>
+            <div class="nsubs__paste-foot"><button class="primary sm" type="button" data-nsubs-convert>Convertir en subtareas ↓</button></div>
+          </div>
+          <div class="nsubs__list" id="nsubsList" hidden></div>
+        </div>
       </section>
 
       <section class="block">
@@ -256,6 +356,9 @@
           <button type="button" role="radio" data-dest="brand"><strong>Marca específica</strong><small>Sabores, Extremas, Manía…</small></button>
         </div>
         <div class="chips chips--brands" id="brandChips" role="radiogroup" aria-label="Marca" hidden></div>
+        <label id="customBrandField" hidden>¿Qué marca?
+          <input name="customBrand" maxlength="80" placeholder="Escribí el nombre de la marca…" />
+        </label>
         <p class="field-label">Fecha ideal de entrega</p>
         <div class="due">
           <div class="chips" id="dueChips">
@@ -265,6 +368,7 @@
           </div>
           <input type="date" name="due" aria-label="Fecha ideal de entrega" />
         </div>
+        <p class="sla" id="slaHint"></p>
         <div class="form-grid" id="designExtras" hidden>
           <label>Área solicitante
             <select name="area"></select>
@@ -279,7 +383,7 @@
       </section>
 
       <section class="block">
-        <div class="block__head"><span>3. Contenido y archivos</span></div>
+        <div class="block__head"><span>3. Contenido y archivos</span><span class="draft-note">💾 Borrador automático activo</span></div>
         <label>Indicaciones
           <textarea name="description" maxlength="4000" placeholder="Textos finales, medidas, público y cualquier referencia clave…"></textarea>
         </label>
@@ -294,6 +398,7 @@
 
       <p class="auth__error" id="newError" role="alert" hidden></p>
       <div class="actions">
+        <button class="linkish linkish--muted" type="button" data-clear-draft>Limpiar borrador</button>
         <button class="secondary" type="button" data-close>Cancelar</button>
         <button class="primary" type="submit" id="newSubmit">Enviar solicitud</button>
       </div>
